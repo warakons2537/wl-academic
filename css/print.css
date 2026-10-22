@@ -1,0 +1,19 @@
+/* สั่งพิมพ์: แสดงเฉพาะหน้าเอกสาร (คำสั่ง A4 หรือตารางสรุป) */
+@media print {
+  @page { size: A4 portrait; margin: 0; }
+  @page land { size: A4 landscape; margin: 0; }
+  html, body { background: #fff !important; height: auto !important; }
+  .side, .demo-bar, .page-head, .no-print, .toast, .tabs, .modal-wrap, .card:not(.print-area), .editor .form { display: none !important; }
+  .shell { display: block; }
+  .main { padding: 0 !important; }
+  .main-inner { max-width: none; gap: 0; display: block; }
+  .print-only { display: block !important; }
+  .print-area { border: 0 !important; padding: 0 !important; background: none !important; box-shadow: none !important; }
+  .editor { display: block; }
+  .doc-scroll { overflow: visible; padding: 0; background: none; border-radius: 0; }
+  .doc-zoom { display: block; padding: 0; width: auto; zoom: 1 !important; }
+  .doc-page { box-shadow: none; margin: 0; break-after: page; }
+  .doc-page:last-child { break-after: auto; }
+  .a4 { box-shadow: none; margin: 0; break-after: page; min-height: 0 !important; }
+  .a4.land { page: land; }
+}
