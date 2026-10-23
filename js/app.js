@@ -7,8 +7,10 @@ import * as home from './views/home.js';
 import * as basics from './views/basics.js';
 import * as workload from './views/workload.js';
 import * as orders from './views/orders.js';
+import * as track from './views/track.js';
+import * as checklist from './views/checklist.js';
 
-const VIEWS = { home, basics, workload, orders };
+const VIEWS = { home, basics, workload, orders, track, checklist };
 const root = document.getElementById('app');
 let cleanup = null;
 const YEAR_KEY = 'wl-academic-year';
@@ -125,9 +127,9 @@ function renderShell(ctx) {
           <div class="sec">งานวิชาการ</div>
           ${item('workload', 'จัดภาระงาน')}
           ${item('orders', 'ออกคำสั่ง')}
+          ${item('track', 'ติดตามงาน')}
+          ${item('checklist', 'เช็กการส่งงาน')}
           <div class="sec">ระยะถัดไป</div>
-          ${soon('track', 'ติดตามงาน')}
-          ${soon('check', 'เช็กการส่งงาน')}
           ${soon('trophy', 'คลังผลงาน')}
           ${soon('report', 'รายงาน SAR/PA')}
           ${BRAND.siblings.length ? `<div class="sec">แอปในเครือ</div>${BRAND.siblings.map((s) => `<a href="${esc(s.url)}" class="ext">${icon('link')}<span>${esc(s.name)}</span></a>`).join('')}` : ''}

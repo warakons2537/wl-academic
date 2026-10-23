@@ -5,6 +5,7 @@ const P = {
   workload: '<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M3.5 9h17M3.5 14.5h17M9 3.5v17"/><circle cx="14.5" cy="11.8" r="1.2"/><circle cx="17.3" cy="17.3" r="1.2"/>',
   orders: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M10 11h5M10 14.5h5"/><circle cx="12.5" cy="18" r="1.4"/>',
   track: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="m7.5 14 3.5-4 3 2.5L19 7"/>',
+  checklist: '<rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><path d="m8 12 3 3 5-6"/>',
   check: '<rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><path d="m8 12 3 3 5-6"/>',
   trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4M9 20h6M10 17h4"/>',
   report: '<path d="M6 3h12v18H6z"/><path d="M9 8h6M9 11.5h6M9 15h3"/>',

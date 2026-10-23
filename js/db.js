@@ -75,7 +75,7 @@ function supabaseDb() {
 // ---------------------------------------------------------------------
 //  โหมดทดลอง: ข้อมูลอยู่ในเบราว์เซอร์นี้ + ส่งการเปลี่ยนแปลงข้ามแท็บแบบเรียลไทม์
 // ---------------------------------------------------------------------
-const DEMO_KEY = 'wl-academic-demo-v1';
+const DEMO_KEY = 'wl-academic-demo-v2';
 
 function demoDb() {
   let state;
@@ -104,7 +104,7 @@ function demoDb() {
 
   // คีย์หลักของแต่ละตาราง (ตารางที่ไม่มี id)
   const PK = {
-    school_settings: ['id'], ac_settings: ['id'], ac_assets: ['key'],
+    school_settings: ['id'], ac_settings: ['id'], ac_assets: ['key'], ac_progress: ['task_id'],
   };
   const pk = (t) => PK[t] || ['id'];
   const sameRow = (t, a, b) => pk(t).every((k) => a[k] === b[k]);

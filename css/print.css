@@ -2,6 +2,7 @@
 @media print {
   @page { size: A4 portrait; margin: 0; }
   @page land { size: A4 landscape; margin: 0; }
+  @page flow { size: A4 portrait; margin: 12mm 12mm 14mm; }
   html, body { background: #fff !important; height: auto !important; }
   .side, .demo-bar, .page-head, .no-print, .toast, .tabs, .modal-wrap, .card:not(.print-area), .editor .form { display: none !important; }
   .shell { display: block; }
@@ -16,4 +17,5 @@
   .doc-page:last-child { break-after: auto; }
   .a4 { box-shadow: none; margin: 0; break-after: page; min-height: 0 !important; }
   .a4.land { page: land; }
+  .a4.flow { page: flow; padding: 0; width: auto; }
 }

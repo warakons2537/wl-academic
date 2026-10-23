@@ -194,3 +194,33 @@ export const ROLES = {
   secretary: { label: 'กรรมการและเลขานุการ', short: 'ล', order: 2 },
 };
 export const ROLE_CYCLE = [null, 'head', 'member', 'secretary'];
+
+// ---------- เฟส 2 ----------
+export const PROGRESS = {
+  not_started: { label: 'ยังไม่เริ่ม', cls: 'st-none' },
+  in_progress: { label: 'กำลังดำเนินการ', cls: 'st-doing' },
+  submitted: { label: 'ส่งตรวจแล้ว', cls: 'st-sent' },
+  done: { label: 'เสร็จสมบูรณ์', cls: 'st-done' },
+};
+export const PERIODS = { 1: 'ภาคเรียนที่ 1', 2: 'ภาคเรียนที่ 2', year: 'ตลอดปี' };
+
+// สถานะการส่งงาน (ไม่มีแถว = none)
+export const SUBMIT = {
+  none: { label: 'ยังไม่ส่ง', mark: '✕', cls: 'sb-none' },
+  submitted: { label: 'รอตรวจ', mark: '◷', cls: 'sb-wait' },
+  passed: { label: 'ผ่าน', mark: '✓', cls: 'sb-pass' },
+  returned: { label: 'ส่งกลับแก้ไข', mark: '↩', cls: 'sb-back' },
+  na: { label: 'ไม่เกี่ยวข้อง', mark: '–', cls: 'sb-na' },
+};
+export const SUBMIT_CYCLE = ['none', 'submitted', 'passed', 'na'];
+
+// รายการเอกสารตั้งต้น (period 'term' = ภาคเรียนที่กำลังสร้าง)
+export const CHECKLIST_DEFAULTS = [
+  { name: 'โครงสร้างรายวิชา', period: 'term' },
+  { name: 'แผนการจัดการเรียนรู้', period: 'term' },
+  { name: 'บันทึกหลังสอน', period: 'term' },
+  { name: 'ข้อสอบกลางภาค/ปลายภาค', period: 'term' },
+  { name: 'แบบบันทึกผลการเรียน (ปพ.5 / ปพ.6)', period: 'term' },
+  { name: 'วิจัยในชั้นเรียน', period: 'year' },
+  { name: 'รายงานการนิเทศการสอน / PLC', period: 'term' },
+];

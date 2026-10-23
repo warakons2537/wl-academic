@@ -202,3 +202,129 @@ do $$ declare t text; begin
     end loop;
   end if;
 end $$;
+
+
+-- =====================================================================
+--  เฟส 2: ติดตามงานวิชาการ + เช็กการส่งงานครู
+-- =====================================================================
+
+-- ความคืบหน้าของแต่ละงาน (1 แถวต่องาน)
+create table if not exists public.ac_progress (
+  task_id     uuid primary key references public.ac_tasks(id) on delete cascade,
+  status      text not null default 'not_started' check (status in ('not_started','in_progress','submitted','done')),
+  percent     smallint not null default 0 check (percent between 0 and 100),
+  period      text not null default 'year' check (period in ('1','2','year')),
+  due_date    date,
+  updated_at  timestamptz not null default now()
+);
+comment on column public.ac_progress.status is 'not_started = ยังไม่เริ่ม, in_progress = กำลังดำเนินการ, submitted = ส่งตรวจแล้ว, done = เสร็จสมบูรณ์/ผอ.อนุมัติ';
+
+-- บันทึกความเคลื่อนไหวของงาน
+create table if not exists public.ac_progress_logs (
+  id          uuid primary key default gen_random_uuid(),
+  task_id     uuid not null references public.ac_tasks(id) on delete cascade,
+  log_date    date not null default current_date,
+  note        text not null default '',
+  link        text not null default '',
+  created_by  uuid references public.profiles(id) on delete set null default auth.uid(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists ac_logs_task on public.ac_progress_logs (task_id, log_date);
+
+-- รายการเอกสารที่ครูต้องส่ง (period: '1' = ภาคเรียนที่ 1, '2' = ภาคเรียนที่ 2, 'year' = ทั้งปี)
+create table if not exists public.ac_checklist_items (
+  id             uuid primary key default gen_random_uuid(),
+  academic_year  int not null check (academic_year between 2500 and 2700),
+  period         text not null default '1' check (period in ('1','2','year')),
+  name           text not null,
+  due_date       date,
+  sort_order     int not null default 0,
+  updated_at     timestamptz not null default now()
+);
+create index if not exists ac_items_year on public.ac_checklist_items (academic_year, sort_order);
+
+-- การส่งงานของครู (ไม่มีแถว = ยังไม่ส่ง)
+create table if not exists public.ac_submissions (
+  id            uuid primary key default gen_random_uuid(),
+  item_id       uuid not null references public.ac_checklist_items(id) on delete cascade,
+  staff_id      uuid not null references public.staff(id) on delete cascade,
+  status        text not null default 'submitted' check (status in ('submitted','passed','returned','na')),
+  link          text not null default '',
+  note          text not null default '',              -- หมายเหตุจากผู้ส่ง
+  submitted_at  date,
+  review_note   text not null default '',              -- ความเห็นผู้ตรวจ (เช่น เหตุผลที่ส่งกลับแก้ไข)
+  reviewed_by   uuid references public.profiles(id) on delete set null,
+  reviewed_at   timestamptz,
+  updated_by    uuid references public.profiles(id) on delete set null default auth.uid(),
+  updated_at    timestamptz not null default now(),
+  unique (item_id, staff_id)
+);
+comment on column public.ac_submissions.status is 'submitted = รอตรวจ, passed = ผ่าน, returned = ส่งกลับแก้ไข, na = ไม่เกี่ยวข้อง';
+
+do $$ declare t text; begin
+  foreach t in array array['ac_progress','ac_progress_logs','ac_checklist_items','ac_submissions'] loop
+    execute format('drop trigger if exists %I_touch on public.%I', t, t);
+    execute format('create trigger %I_touch before update on public.%I for each row execute function public.touch_updated_at()', t, t);
+  end loop;
+end $$;
+
+-- บุคลากรรายนี้คือผู้ใช้ที่ล็อกอินอยู่หรือไม่
+create or replace function public.ac_is_my_staff(sid uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.is_staff() and exists (select 1 from public.staff where id = sid and profile_id = auth.uid())
+$$;
+
+-- ครูส่งงานของตัวเอง: เปิดสวิตช์แล้วเท่านั้น · สถานะเป็น "รอตรวจ" เสมอ · แก้ความเห็นผู้ตรวจไม่ได้
+create or replace function public.ac_guard_submission() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or public.is_admin() then return new; end if;
+  if not coalesce((select teachers_enabled from public.ac_settings where id = 1), false) then
+    raise exception 'ยังไม่เปิดให้ครูส่งงาน';
+  end if;
+  if not public.ac_is_my_staff(new.staff_id) then raise exception 'ส่งได้เฉพาะงานของตัวเอง'; end if;
+  if tg_op = 'UPDATE' and (new.staff_id is distinct from old.staff_id or new.item_id is distinct from old.item_id) then
+    raise exception 'ส่งได้เฉพาะงานของตัวเอง';
+  end if;
+  new.status := 'submitted';
+  new.submitted_at := coalesce(new.submitted_at, current_date);
+  new.updated_by := auth.uid();
+  if tg_op = 'UPDATE' then
+    new.review_note := old.review_note; new.reviewed_by := old.reviewed_by; new.reviewed_at := old.reviewed_at;
+  else
+    new.review_note := ''; new.reviewed_by := null; new.reviewed_at := null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists ac_submissions_guard on public.ac_submissions;
+create trigger ac_submissions_guard before insert or update on public.ac_submissions
+  for each row execute function public.ac_guard_submission();
+
+alter table public.ac_progress        enable row level security;
+alter table public.ac_progress_logs   enable row level security;
+alter table public.ac_checklist_items enable row level security;
+alter table public.ac_submissions     enable row level security;
+
+do $$ declare t text; begin
+  foreach t in array array['ac_progress','ac_progress_logs','ac_checklist_items','ac_submissions'] loop
+    execute format('drop policy if exists %I_read on public.%I', t, t);
+    execute format('drop policy if exists %I_admin on public.%I', t, t);
+    execute format('create policy %I_read on public.%I for select using (public.ac_can_read())', t, t);
+    execute format('create policy %I_admin on public.%I for all using (public.is_admin()) with check (public.is_admin())', t, t);
+  end loop;
+end $$;
+drop policy if exists ac_submissions_own_ins on public.ac_submissions;
+drop policy if exists ac_submissions_own_upd on public.ac_submissions;
+create policy ac_submissions_own_ins on public.ac_submissions for insert with check (public.ac_is_my_staff(staff_id));
+create policy ac_submissions_own_upd on public.ac_submissions for update
+  using (public.ac_is_my_staff(staff_id)) with check (public.ac_is_my_staff(staff_id));
+
+do $$ declare t text; begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    foreach t in array array['ac_progress','ac_progress_logs','ac_checklist_items','ac_submissions'] loop
+      begin
+        execute format('alter publication supabase_realtime add table public.%I', t);
+      exception when duplicate_object then null; end;
+    end loop;
+  end if;
+end $$;

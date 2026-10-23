@@ -72,5 +72,34 @@ export function seedDemo() {
     options: { numerals: 'thai', show_duties: true }, status: 'draft', snapshot: null, created_by: 'u-admin', updated_at: '2027-03-01T09:00:00Z',
   }];
 
-  return { profiles, school_settings, terms, ac_settings, ac_assets: [], staff, ac_tasks, ac_assignments, ac_orders };
+  // เฟส 2: ความคืบหน้า + การส่งงาน (ตัวอย่าง)
+  const ST = ['done', 'done', 'in_progress', 'submitted', 'in_progress', 'in_progress', 'not_started', 'done', 'in_progress', 'not_started',
+    'in_progress', 'in_progress', 'not_started', 'done', 'not_started', 'not_started', 'in_progress'];
+  const PC = { done: 100, submitted: 90, in_progress: 50, not_started: 0 };
+  const ac_progress = ac_tasks.map((t, i) => ({ task_id: t.id, status: ST[i], percent: ST[i] === 'in_progress' ? 30 + (i * 13) % 50 : PC[ST[i]],
+    period: i % 3 === 0 ? '1' : i % 3 === 1 ? '2' : 'year', due_date: i === 2 ? '2026-09-30' : i === 6 ? '2026-10-15' : i % 4 === 0 ? '2027-03-15' : null, updated_at: '2026-10-20T09:00:00Z' }));
+  const ac_progress_logs = [
+    { id: 'lg-1', task_id: 'tk-01', log_date: '2026-05-16', note: 'ประชุมทบทวนหลักสูตรครบ 3 ระดับแล้ว', link: '', created_by: 'u-admin', updated_at: '2026-05-16T09:00:00Z' },
+    { id: 'lg-2', task_id: 'tk-01', log_date: '2026-06-10', note: 'คณะกรรมการสถานศึกษาให้ความเห็นชอบหลักสูตร', link: 'https://drive.google.com/', created_by: 'u-admin', updated_at: '2026-06-10T09:00:00Z' },
+    { id: 'lg-3', task_id: 'tk-03', log_date: '2026-09-20', note: 'ตรวจข้อสอบกลางภาคเรียนครบทุกวิชา', link: '', created_by: 'u-admin', updated_at: '2026-09-20T09:00:00Z' },
+  ];
+  const ac_checklist_items = [
+    ['ck-1', '1', 'โครงสร้างรายวิชา', '2026-05-31'], ['ck-2', '1', 'แผนการจัดการเรียนรู้', '2026-06-15'], ['ck-3', '1', 'บันทึกหลังสอน', '2026-10-09'],
+    ['ck-4', '1', 'ข้อสอบกลางภาค/ปลายภาค', '2026-09-15'], ['ck-5', '1', 'แบบบันทึกผลการเรียน (ปพ.5 / ปพ.6)', '2026-10-15'],
+    ['ck-6', 'year', 'วิจัยในชั้นเรียน', '2027-03-15'], ['ck-7', '1', 'รายงานการนิเทศการสอน / PLC', '2026-10-09'],
+    ['ck-8', '2', 'โครงสร้างรายวิชา', '2026-11-15'], ['ck-9', '2', 'แผนการจัดการเรียนรู้', '2026-11-30'], ['ck-10', '2', 'บันทึกหลังสอน', null],
+  ].map(([id, period, name, due_date], k) => ({ id, academic_year: 2569, period, name, due_date, sort_order: k + 1 }));
+  const teachers = ['st-02', 'st-03', 'st-04', 'st-05', 'st-06', 'st-07', 'st-08', 'st-09'];
+  const ac_submissions = [];
+  const pick = ['passed', 'passed', 'passed', 'submitted', 'passed', null, 'returned', 'passed', 'na'];
+  ac_checklist_items.filter((i) => i.period === '1' || i.id === 'ck-8' || i.id === 'ck-6').forEach((it, a) => teachers.forEach((sid, b) => {
+    const st = it.id === 'ck-8' ? (b < 3 ? 'submitted' : null) : it.id === 'ck-6' ? (b < 2 ? 'passed' : null) : pick[(a * 3 + b * 2) % pick.length];
+    if (!st || (sid === 'st-06' && it.id === 'ck-4' && st !== 'na')) return;
+    ac_submissions.push({ id: `sb-${it.id}-${sid}`, item_id: it.id, staff_id: sid, status: st, link: st === 'na' ? '' : 'https://drive.google.com/',
+      note: '', submitted_at: st === 'na' ? null : '2026-06-01', review_note: st === 'returned' ? 'ขาดตัวชี้วัดบางข้อ กรุณาเพิ่มเติม' : '',
+      reviewed_by: ['passed', 'returned'].includes(st) ? 'u-admin' : null, reviewed_at: ['passed', 'returned'].includes(st) ? '2026-06-05T09:00:00Z' : null });
+  }));
+
+  return { profiles, school_settings, terms, ac_settings, ac_assets: [], staff, ac_tasks, ac_assignments, ac_orders,
+    ac_progress, ac_progress_logs, ac_checklist_items, ac_submissions };
 }

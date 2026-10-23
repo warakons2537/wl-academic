@@ -331,7 +331,7 @@ async function settings(el, ctx) {
     <h2>การเข้าใช้งาน</h2>
     <label class="inline"><input type="checkbox" name="teachers_enabled" ${a.teachers_enabled ? 'checked' : ''} ${dis}>
       เปิดให้ครูทุกคน (ที่อนุมัติใน WL Admin แล้ว) เข้าดู WL Academic ได้</label>
-    <p class="hint">ตอนนี้ครูจะ "ดูได้อย่างเดียว" สิทธิ์ส่งงานและอัปเดตความคืบหน้าของครูจะมาพร้อมเมนูระยะถัดไป ปิดสวิตช์นี้ = เฉพาะผู้ดูแล/ฝ่ายวิชาการ</p>
+    <p class="hint">เปิดแล้ว ครูดูข้อมูลได้ และ<b>ส่งเอกสารของตัวเอง</b>ได้ในเมนู "เช็กการส่งงาน" (ต้องผูกบัญชีกับรายชื่อในแท็บบุคลากร) ส่วนอื่นยังแก้ไม่ได้ · ปิดสวิตช์นี้ = เฉพาะผู้ดูแล/ฝ่ายวิชาการ</p>
     <h2 style="margin-top:8px">ค่าตั้งต้นของคำสั่ง</h2>
     <label class="inline"><span>ตัวเลขในคำสั่ง</span>
       <select name="numerals" ${dis}><option value="thai" ${a.numerals !== 'arabic' ? 'selected' : ''}>เลขไทย (๑ ๒ ๓)</option><option value="arabic" ${a.numerals === 'arabic' ? 'selected' : ''}>เลขอารบิก (1 2 3)</option></select></label>
