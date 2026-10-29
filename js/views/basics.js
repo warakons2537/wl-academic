@@ -184,7 +184,8 @@ async function staff(el, ctx, redraw) {
     if (!r) return;
     let k = nextOrder();
     const rows = unlinkedProfiles.filter((p) => r[`p_${p.id}`]).map((p) => ({ ...splitName(p.full_name || p.email), position: 'ครู', profile_id: p.id, sort_order: k++ }));
-    if (rows.length) { await save(rows); toast(`นำเข้า ${rows.length} คน`); }
+    try { if (rows.length) { await save(rows); toast(`นำเข้า ${rows.length} คน`); } }
+    catch (err) { console.error(err); toast(`นำเข้าไม่สำเร็จ: ${err.message}`, 'err'); }
   });
 
   $('#s-paste', el)?.addEventListener('click', async () => {
@@ -195,7 +196,8 @@ async function staff(el, ctx, redraw) {
     const rows = r.t.split('\n').map((line) => line.split(/\t|,/).map((x) => x.trim())).filter((c) => c[0])
       .map(([name, position, rank]) => ({ ...splitName(name), position: position || 'ครู', academic_rank: (rank || '').replace(/^วิทยฐานะ\s*/, ''), sort_order: k++ }));
     if (rows.some((x) => !x.first_name)) return toast('มีบางบรรทัดที่อ่านชื่อไม่ได้', 'err');
-    await save(rows); toast(`เพิ่ม ${rows.length} คน`);
+    try { await save(rows); toast(`เพิ่ม ${rows.length} คน`); }
+    catch (err) { console.error(err); toast(`เพิ่มรายชื่อไม่สำเร็จ: ${err.message}`, 'err'); }
   });
 }
 
