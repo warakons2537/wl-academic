@@ -24,5 +24,6 @@ const P = {
   down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
   warn: '<path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4.5M12 17.5v.01"/>',
   back: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  more: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>',
 };
 export const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${P[name] || ''}</svg>`;

@@ -1,6 +1,7 @@
 import { db } from './db.js';
 import { esc, $, $$, toast, indexBy, modal } from './util.js';
 import { icon } from './icons.js';
+import { mountNav, labelHtml } from './navbar.js';
 import { BRAND } from './brand.js';
 import { guessAcademicYear } from './thai.js';
 import * as home from './views/home.js';
@@ -110,38 +111,48 @@ function messagePage(title, html) {
 // ---------------------------------------------------------------------
 const schoolLine = (ctx) => (ctx.schoolName ? `โรงเรียน${ctx.schoolName}` : 'ยังไม่ได้ตั้งชื่อโรงเรียน');
 
+// ​ = จุดตัดบรรทัดที่ระบุเอง (กันตัดกลางคำบนเมนูแคบ)
+const NAV = { home: 'หน้าแรก', basics: 'ข้อมูล​พื้นฐาน', workload: 'จัดภาระ​งาน', orders: 'ออกคำสั่ง', track: 'ติดตามงาน', checklist: 'เช็กการ​ส่งงาน' };
+const BAR = ['home', 'workload', 'orders', 'track'];      // แถบเมนูล่างบนมือถือ
+const MORE = ['basics', 'checklist'];                      // อยู่ในแผง "เพิ่มเติม"
+let navCtl = null;
+
 function renderShell(ctx) {
-  const item = (v, label) => `<a href="#${v}" data-v="${v}">${icon(v)}<span>${label}</span></a>`;
-  const soon = (ic, label) => `<span class="soon" title="ระยะถัดไป">${icon(ic)}<span>${label}</span><i>เร็ว ๆ นี้</i></span>`;
+  const item = (v) => `<a href="#${v}" data-v="${v}">${icon(v)}<span>${labelHtml(NAV[v])}</span></a>`;
+  const soon = (ic, label) => `<span class="soon" title="ระยะถัดไป">${icon(ic)}<span>${labelHtml(label)}</span></span>`;
   const name = ctx.me.full_name || ctx.me.email || '';
   root.innerHTML = `
     <div class="shell">
       <aside class="side no-print">
-        <div class="brand"><img class="mark" src="${BRAND.logo}" alt=""><b>${esc(BRAND.name)}</b>
-          <small id="brand-school">${esc(schoolLine(ctx))}</small>
-          <label class="year-pick"><span>ปีการศึกษา</span><select id="year">${yearOptions(ctx)}</select></label></div>
+        <div class="brand"><img class="mark" src="${BRAND.logo}" alt=""><b>${esc(BRAND.name)}</b></div>
         <nav class="nav">
-          ${item('home', 'หน้าแรก')}
+          ${item('home')}
           <div class="sec">ตั้งต้น</div>
-          ${item('basics', 'ข้อมูลพื้นฐาน')}
+          ${item('basics')}
           <div class="sec">งานวิชาการ</div>
-          ${item('workload', 'จัดภาระงาน')}
-          ${item('orders', 'ออกคำสั่ง')}
-          ${item('track', 'ติดตามงาน')}
-          ${item('checklist', 'เช็กการส่งงาน')}
+          ${item('workload')}
+          ${item('orders')}
+          ${item('track')}
+          ${item('checklist')}
           <div class="sec">ระยะถัดไป</div>
           ${soon('trophy', 'คลังผลงาน')}
-          ${soon('report', 'รายงาน SAR/PA')}
+          ${soon('report', 'รายงาน​SAR/PA')}
           ${BRAND.siblings.length ? `<div class="sec">แอปในเครือ</div>${BRAND.siblings.map((s) => `<a href="${esc(s.url)}" class="ext">${icon('link')}<span>${esc(s.name)}</span></a>`).join('')}` : ''}
         </nav>
-        <div class="who"><span class="avatar" aria-hidden="true">${esc((name.replace(/^(ครู|นาย|นางสาว|นาง)\s*/, '').replace(/^[เแโใไ]/, '')[0]) || '?')}</span>
-          <span title="${esc(name)}">${esc(name)}${ctx.canEdit ? '' : '<br><small>ดูอย่างเดียว</small>'}</span>
-          <label class="mobile-year"><span class="sr">ปีการศึกษา</span><select id="year-m">${yearOptions(ctx)}</select></label>
-          <button class="btn btn-sm" id="logout" title="ออกจากระบบ" aria-label="ออกจากระบบ">${icon('logout')}</button></div>
       </aside>
-      <main class="main">${db.mode === 'demo' ? `<div class="demo-bar no-print"><span><b>โหมดทดลอง</b> ข้อมูลตัวอย่าง (ชื่อสมมติ) เก็บในเบราว์เซอร์นี้เท่านั้น</span>
-        <button class="btn btn-sm" id="demo-reset">ล้างข้อมูลทดลอง</button></div>` : ''}<div class="main-inner" id="view"></div></main>
-    </div>`;
+      <main class="main">
+        <header class="topbar no-print">
+          <div class="tb-title"><b>${esc(BRAND.name)}</b><small id="brand-school">${esc(schoolLine(ctx))}</small></div>
+          <label class="tb-year"><span>ปีการศึกษา</span><select id="year" aria-label="ปีการศึกษา">${yearOptions(ctx)}</select></label>
+          <div class="tb-user"><span class="avatar" aria-hidden="true">${esc((name.replace(/^(ครู|นาย|นางสาว|นาง)\s*/, '').replace(/^[เแโใไ]/, '')[0]) || '?')}</span>
+            <span class="nm"><b title="${esc(name)}">${esc(name)}</b>${ctx.canEdit ? '' : '<small>ดูอย่างเดียว</small>'}</span>
+            <button class="btn btn-sm" id="logout" title="ออกจากระบบ" aria-label="ออกจากระบบ">${icon('logout')}</button></div>
+        </header>
+        <div class="main-pad">${db.mode === 'demo' ? `<div class="demo-bar no-print"><span><b>โหมดทดลอง</b> ข้อมูลตัวอย่าง (ชื่อสมมติ) เก็บในเบราว์เซอร์นี้เท่านั้น</span>
+        <button class="btn btn-sm" id="demo-reset">ล้างข้อมูลทดลอง</button></div>` : ''}<div class="main-inner" id="view"></div></div></main>
+    </div>
+    <div id="bnav-root"></div>`;
+  navCtl = mountNav($('#bnav-root'), { labels: NAV, bar: BAR, more: MORE, ext: BRAND.siblings });
   $('#logout').addEventListener('click', async () => { await db.auth.signOut(); boot(); });
   $('#demo-reset')?.addEventListener('click', async () => { db.resetDemo(); await db.auth.signOut(); boot(); });
   const onYear = async (e) => {
@@ -159,19 +170,19 @@ function renderShell(ctx) {
     route(ctx);
   };
   $('#year').addEventListener('change', onYear);
-  $('#year-m').addEventListener('change', onYear);
 }
 
 const yearOptions = (ctx) => ctx.years.map((y) => `<option ${y === ctx.year ? 'selected' : ''}>${y}</option>`).join('')
   + (ctx.canEdit ? '<option value="new">+ เพิ่มปี…</option>' : '');
 function drawYears(ctx) {
-  for (const id of ['year', 'year-m']) { const sel = document.getElementById(id); if (sel) sel.innerHTML = yearOptions(ctx); }
+  const sel = document.getElementById('year'); if (sel) sel.innerHTML = yearOptions(ctx);
 }
 
 async function route(ctx) {
   const v = (location.hash.replace('#', '') || 'home').split('?')[0];
   const view = VIEWS[v] ? v : 'home';
   $$('.nav a[data-v]').forEach((a) => a.classList.toggle('on', a.dataset.v === view));
+  navCtl?.setView(view);
   if (cleanup) { try { cleanup(); } catch { /* */ } cleanup = null; }
   const el = $('#view');
   el.innerHTML = '<p class="muted">กำลังโหลด…</p>';
