@@ -304,9 +304,14 @@ input[type=checkbox], input[type=radio] { accent-color: var(--pen); width: 16px;
 .icon-btn.danger:hover { background: var(--red-wash); color: var(--red); }
 
 /* หน้าแรก */
-.hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: end; }
-.hero .title { font-family: var(--font-display); font-size: 2rem; line-height: 1.2; font-weight: 600; }
-.hero .title small { display: block; font-family: var(--font-ui); font-size: .95rem; color: var(--ink-soft); font-weight: 400; margin-top: 4px; }
+.welcome { background: var(--pen-wash); color: var(--on-pen-wash); border-radius: 24px; padding: 22px 26px; display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto; gap: 16px 20px; align-items: center; }
+.welcome .av { width: 64px; height: 64px; border-radius: 50%; background: color-mix(in srgb, var(--on-pen-wash) 14%, transparent); display: grid; place-items: center;
+  font-family: var(--font-display); font-size: 1.7rem; font-weight: 600; border: 2px solid color-mix(in srgb, var(--on-pen-wash) 35%, transparent); }
+.welcome h1 { font-size: 1.55rem; color: inherit; }
+.welcome p { margin: 4px 0 0; opacity: .9; font-size: .92rem; }
+@media (max-width: 600px) { .welcome { grid-template-columns: auto minmax(0, 1fr); padding: 18px; } .welcome .av { width: 48px; height: 48px; font-size: 1.3rem; }
+  .welcome .btn { grid-column: 1 / -1; justify-content: center; } .welcome h1 { font-size: 1.25rem; } }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .stats .card { gap: 2px; padding: 14px 16px; }
 .steps { display: flex; flex-direction: column; gap: 0; counter-reset: st; }

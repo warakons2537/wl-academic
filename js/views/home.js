@@ -4,6 +4,8 @@ import { loadYear, workloadSummary, membersOf, taskWarnings, isTeacherLike, load
 import { staffName } from '../thai.js';
 import { BRAND } from '../brand.js';
 
+const THAI_DAYS = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+
 export async function render(el, ctx) {
   const [year, orders, garuda] = await Promise.all([
     loadYear(ctx.db, ctx.year),
@@ -41,10 +43,12 @@ export async function render(el, ctx) {
   ];
 
   el.innerHTML = `
-    <div class="hero">
-      <div class="title">ปีการศึกษา ${ctx.year}<small>${esc(ctx.schoolName ? `โรงเรียน${ctx.schoolName}` : BRAND.tagline)} · วันนี้ ${thaiDate(todayIso())}</small></div>
-      ${ctx.canEdit ? `<a class="btn btn-primary" href="#workload">${icon('workload')} จัดภาระงาน</a>` : ''}
-    </div>
+    <section class="welcome">
+      <div class="av" aria-hidden="true">${esc(((ctx.me.full_name || '').replace(/^(ครู|นาย|นางสาว|นาง)\s*/, '').replace(/^[เแโใไ]/, '')[0]) || '?')}</div>
+      <div><h1>${ctx.me.full_name ? `สวัสดี ${esc(ctx.me.full_name)}` : 'สวัสดี'}</h1>
+        <p>วัน${THAI_DAYS[new Date().getDay()]}ที่ ${thaiDate(todayIso())} · ปีการศึกษา ${ctx.year} · ${esc(ctx.schoolName ? `โรงเรียน${ctx.schoolName}` : BRAND.tagline)}</p></div>
+      ${ctx.canEdit ? `<a class="btn btn-gold" href="#workload">${icon('workload')} จัดภาระงาน</a>` : ''}
+    </section>
     <div class="stats">
       <div class="card stat"><b>${active.length}</b><span>บุคลากร</span></div>
       <div class="card stat"><b>${year.tasks.length}</b><span>งานวิชาการ</span></div>
