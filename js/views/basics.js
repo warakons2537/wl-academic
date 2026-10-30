@@ -20,7 +20,7 @@ export async function render(el, ctx) {
     stop();
     el.innerHTML = `
       <div class="page-head"><div><h1>ข้อมูลพื้นฐาน</h1><p>ข้อมูลตั้งต้นที่ใช้ในการจัดภาระงานและออกคำสั่ง${ctx.canEdit ? '' : ' (ดูอย่างเดียว)'}</p></div></div>
-      <div class="tabs">${TABS.map(([k, l]) => `<button data-t="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="tabs tabs-pill">${TABS.map(([k, l]) => `<button data-t="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div>
       <div id="tab-body"></div>`;
     $$('[data-t]', el).forEach((b) => b.addEventListener('click', () => {
       tab = b.dataset.t; history.replaceState(null, '', `#basics?tab=${tab}`); draw();
@@ -128,14 +128,14 @@ async function staff(el, ctx, redraw) {
         ${unlinkedProfiles.length ? `<button class="btn" id="s-import">${icon('users')} นำเข้าจากผู้ใช้ WL Admin (${unlinkedProfiles.length})</button>` : ''}
         <button class="btn btn-primary" id="s-add">${icon('plus')} เพิ่มบุคลากร</button>` : ''}
     </div>
-    ${list.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th class="c">ที่</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>ระดับชั้น / กลุ่มสาระ</th><th>บัญชีผู้ใช้</th>${ctx.canEdit ? '<th></th>' : ''}</tr></thead>
+    ${list.length ? `<div class="tbl-wrap"><table class="tbl tbl-card"><thead><tr><th class="c">ที่</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>ระดับชั้น / กลุ่มสาระ</th><th>บัญชีผู้ใช้</th>${ctx.canEdit ? '<th></th>' : ''}</tr></thead>
       <tbody>${list.map((s, i) => `<tr class="${s.active ? '' : 'inactive'}">
-        <td class="c">${i + 1}</td>
-        <td class="nowrap"><b>${esc(staffName(s))}</b>${s.active ? '' : '<span class="sub">ย้าย/ไม่ปฏิบัติงานแล้ว</span>'}</td>
-        <td>${esc(staffTitle(s))}</td>
-        <td>${esc([s.levels, s.subject_area].filter(Boolean).join(' · ') || '-')}</td>
-        <td>${s.profile_id ? `<span class="chip chip-ok">${esc(ctx.profileById[s.profile_id]?.email || 'ผูกแล้ว')}</span>` : '<span class="muted small">-</span>'}</td>
-        ${ctx.canEdit ? `<td style="white-space:nowrap;text-align:right">
+        <td class="c hide-sm">${i + 1}</td>
+        <td class="nowrap tc-ttl"><b>${esc(staffName(s))}</b>${s.active ? '' : '<span class="sub">ย้าย/ไม่ปฏิบัติงานแล้ว</span>'}</td>
+        <td data-l="ตำแหน่ง">${esc(staffTitle(s))}</td>
+        <td data-l="ระดับ/กลุ่มสาระ">${esc([s.levels, s.subject_area].filter(Boolean).join(' · ') || '-')}</td>
+        <td data-l="บัญชี">${s.profile_id ? `<span class="chip chip-ok">${esc(ctx.profileById[s.profile_id]?.email || 'ผูกแล้ว')}</span>` : '<span class="muted small">-</span>'}</td>
+        ${ctx.canEdit ? `<td class="n tc-act" style="white-space:nowrap">
           <button class="icon-btn" data-up="${s.id}" title="เลื่อนขึ้น" ${i ? '' : 'disabled'}>${icon('up')}</button>
           <button class="icon-btn" data-down="${s.id}" title="เลื่อนลง" ${i < list.length - 1 ? '' : 'disabled'}>${icon('down')}</button>
           <button class="icon-btn" data-edit="${s.id}" title="แก้ไข">${icon('edit')}</button>
