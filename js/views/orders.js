@@ -109,7 +109,7 @@ async function editor(el, ctx, id) {
       ${field('effective_text', 'ทั้งนี้ ตั้งแต่…')}
       <div class="cols-2">${field('signer_name', 'ผู้ลงนาม (ชื่อในวงเล็บ)')}${field('signer_title', 'ตำแหน่งผู้ลงนาม')}</div>
       <div class="toolbar">
-        <span class="small">ตัวเลข</span><span class="seg2"><button type="button" data-num="thai" class="${o.options?.numerals !== 'arabic' ? 'on' : ''}" ${locked() ? 'disabled' : ''}>๑ ๒ ๓</button><button type="button" data-num="arabic" class="${o.options?.numerals === 'arabic' ? 'on' : ''}" ${locked() ? 'disabled' : ''}>1 2 3</button></span>
+        <span class="small">ตัวเลข</span><span class="seg"><button type="button" data-num="thai" class="${o.options?.numerals !== 'arabic' ? 'on' : ''}" ${locked() ? 'disabled' : ''}>๑ ๒ ๓</button><button type="button" data-num="arabic" class="${o.options?.numerals === 'arabic' ? 'on' : ''}" ${locked() ? 'disabled' : ''}>1 2 3</button></span>
         <label class="inline small"><input type="checkbox" id="o-duties" ${o.options?.show_duties !== false ? 'checked' : ''} ${locked() ? 'disabled' : ''}> แสดงขอบข่ายหน้าที่</label>
       </div>
       <p class="hint" style="margin-top:-6px">ไม่ติ๊ก "แสดงขอบข่ายหน้าที่" = คำสั่งแบบกระชับ มีเฉพาะรายชื่อผู้รับผิดชอบ</p>
