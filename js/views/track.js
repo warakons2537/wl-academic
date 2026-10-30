@@ -38,14 +38,14 @@ export async function render(el, ctx) {
         <button class="card stat stat-btn ${filter === 'overdue' ? 'on' : ''}" data-f="overdue"><b style="color:${overdue ? 'var(--red)' : 'inherit'}">${overdue}</b><span>เลยกำหนด</span></button>
       </div>
       ${filter !== 'all' ? `<div class="toolbar"><span class="hint">แสดงเฉพาะ: ${esc(filter === 'overdue' ? 'เลยกำหนด' : PROGRESS[filter].label)} (${shown.length} งาน)</span><button class="btn btn-sm" data-f="all">แสดงทั้งหมด</button></div>` : ''}
-      <div class="tbl-wrap"><table class="tbl track-tbl"><thead><tr><th class="c">ที่</th><th>งาน / หัวหน้างาน</th><th>สถานะ</th><th>ความคืบหน้า</th><th>ช่วงเวลา / กำหนด</th><th>ความเคลื่อนไหวล่าสุด</th></tr></thead>
+      <div class="tbl-wrap"><table class="tbl tbl-card track-tbl"><thead><tr><th class="c">ที่</th><th>งาน / หัวหน้างาน</th><th>สถานะ</th><th>ความคืบหน้า</th><th>ช่วงเวลา / กำหนด</th><th>ความเคลื่อนไหวล่าสุด</th></tr></thead>
         <tbody>${shown.map(({ t, no, p }) => { const h = headOf(t); const l = lastLog(t.id); const od = isTaskOverdue(p, today);
-          return `<tr class="click" data-task="${t.id}"><td class="c">${no}</td>
-            <td><b>${esc(t.name)}</b><span class="sub">${h ? esc(staffName(h.staff)) : '<i style="color:var(--amber)">ยังไม่มีหัวหน้างาน</i>'}</span></td>
+          return `<tr class="click" data-task="${t.id}"><td class="c hide-sm">${no}</td>
+            <td class="tc-ttl"><b>${esc(t.name)}</b><span class="sub">${h ? esc(staffName(h.staff)) : '<i style="color:var(--amber)">ยังไม่มีหัวหน้างาน</i>'}</span></td>
             <td><span class="chip ${PROGRESS[p.status].cls}">${PROGRESS[p.status].label}</span></td>
             <td><span class="pbar"><i style="width:${p.percent}%"></i></span><span class="small"> ${p.percent}%</span></td>
             <td class="nowrap">${esc(PERIODS[p.period])}${p.due_date ? `<span class="sub" style="${od ? 'color:var(--red);font-weight:600' : ''}">กำหนด ${thaiDate(p.due_date, true)}${od ? ' · เลยกำหนด' : ''}</span>` : ''}</td>
-            <td>${l ? `<span class="small">${thaiDate(l.log_date, true)}</span><span class="sub clip">${esc(l.note)}</span>` : '<span class="muted small">-</span>'}</td></tr>`; }).join('')}</tbody></table></div>
+            <td data-l="ล่าสุด">${l ? `<span class="small">${thaiDate(l.log_date, true)}</span><span class="sub clip">${esc(l.note)}</span>` : '<span class="muted small">-</span>'}</td></tr>`; }).join('')}</tbody></table></div>
       </div>
       <div class="print-only">${printSheet(rows)}</div>`;
     $$('[data-f]', el).forEach((b) => b.addEventListener('click', () => { filter = b.dataset.f === filter ? 'all' : b.dataset.f; list(); }));
@@ -68,7 +68,7 @@ export async function render(el, ctx) {
         <p>${mem.length ? mem.map((m) => `${esc(staffName(m.staff))} <span class="muted">(${m.role === 'head' ? 'หัวหน้างาน' : m.role === 'secretary' ? 'เลขานุการ' : 'กรรมการ'})</span>`).join(' · ') : 'ยังไม่มีผู้รับผิดชอบ'}</p></div></div>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));align-items:start">
         <form class="card" id="p-form"><h2>ความคืบหน้า</h2>
-          <div class="field">สถานะ<span class="seg2 seg-wrap">${Object.entries(PROGRESS).map(([k, v]) => `<button type="button" data-st="${k}" class="${p.status === k ? 'on' : ''}" ${dis}>${v.label}</button>`).join('')}</span></div>
+          <div class="field">สถานะ<span class="seg seg-wrap">${Object.entries(PROGRESS).map(([k, v]) => `<button type="button" data-st="${k}" class="${p.status === k ? 'on' : ''}" ${dis}>${v.label}</button>`).join('')}</span></div>
           <label class="field">ความคืบหน้า <b id="p-val">${p.percent}%</b><input type="range" name="percent" min="0" max="100" step="5" value="${p.percent}" ${dis}></label>
           <div class="cols-2">
             <label>ช่วงเวลา<select name="period" ${dis}>${Object.entries(PERIODS).map(([k, v]) => `<option value="${k}" ${String(p.period) === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>

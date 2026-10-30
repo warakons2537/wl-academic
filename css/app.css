@@ -513,6 +513,12 @@ ul.log a svg.i { width: 14px; height: 14px; vertical-align: -2px; }
 .seg button:first-child { border-left: 0; }
 .seg button:hover { background: var(--paper); color: var(--ink); }
 .seg button.on { background: var(--chosen); color: var(--on-chosen); font-weight: 700; }
+@media (max-width: 520px) {   /* ตัวเลือกยาว (4 ปุ่ม) → ตาราง 2×2 ไม่ให้ล้นจอ */
+  .seg.seg-wrap { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: var(--r-lg); align-self: stretch; }
+  .seg.seg-wrap button { border-left: 0; border-top: 1px solid var(--outline); padding: 6px 8px; }
+  .seg.seg-wrap button:nth-child(-n+2) { border-top: 0; }
+  .seg.seg-wrap button:nth-child(even) { border-left: 1px solid var(--outline); }
+}
 @media (max-width: 600px) { .hide-sm { display: none; } }
 @media (max-width: 600px) {
   .tbl.tbl-card, .tbl-card tbody { display: block; }
