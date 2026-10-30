@@ -186,7 +186,7 @@ async function route(ctx) {
   navCtl?.setView(view);
   if (cleanup) { try { cleanup(); } catch { /* */ } cleanup = null; }
   const el = $('#view');
-  el.innerHTML = '<p class="muted">กำลังโหลด…</p>';
+  el.innerHTML = '<div class="loading" role="status"><i class="bar"></i><span>กำลังโหลด…</span></div>';
   try { cleanup = (await VIEWS[view].render(el, ctx)) || null; }
   catch (err) { console.error(err); el.innerHTML = `<div class="card"><h2>เปิดหน้านี้ไม่สำเร็จ</h2><p>${esc(err.message)}</p></div>`; }
   window.scrollTo(0, 0);
