@@ -369,6 +369,12 @@ table.mx { border-collapse: separate; border-spacing: 0; font-size: .86rem; }
 .mx tfoot td { position: sticky; bottom: 0; background: var(--paper); font-weight: 700; font-variant-numeric: tabular-nums; font-size: .82rem; z-index: 1; }
 .mx tfoot td.task { z-index: 3; font-weight: 600; color: var(--ink-soft); }
 .mx td.hot { color: var(--red); }
+@media (max-width: 600px) {   /* มือถือ: คอลัมน์งานที่ติดซ้ายแคบลง ให้เห็นคอลัมน์ครูได้หลายคน (แบบตารางเช็กชื่อของ WL Admin) */
+  .mx .task { min-width: 148px; max-width: 168px; padding: 6px 8px; font-size: .8rem; }
+  .mx .task .no { margin-right: 4px; }
+  .mx thead th.person { height: 120px; }
+  .mx thead th { min-width: 42px; }
+}
 .legend-row { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .82rem; color: var(--ink-soft); align-items: center; }
 .legend-row .sw { display: inline-grid; place-items: center; width: 24px; height: 22px; border-radius: 5px; font-weight: 700; font-size: .78rem; margin-right: 5px; }
 
