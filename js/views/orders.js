@@ -52,10 +52,12 @@ async function list(el, ctx) {
     effective_text: ORDER_DEFAULTS.effective, options: { numerals: ctx.ac.numerals || 'thai', show_duties: true }, status: 'draft',
   });
   $('#o-annual', el)?.addEventListener('click', async () => {
-    const [row] = await ctx.db.insert('ac_orders', [{ ...base(), kind: 'annual', title: fillTemplate(ORDER_DEFAULTS.title, vars),
-      reason: fillTemplate(ctx.ac.order_reason || ORDER_DEFAULTS.reason, vars), legal: fillTemplate(ctx.ac.order_legal || ORDER_DEFAULTS.legal, vars),
-      closing: fillTemplate(ctx.ac.order_closing || ORDER_DEFAULTS.closing, vars), body: {} }]);
-    location.hash = `orders?id=${row.id}`;
+    try {
+      const [row] = await ctx.db.insert('ac_orders', [{ ...base(), kind: 'annual', title: fillTemplate(ORDER_DEFAULTS.title, vars),
+        reason: fillTemplate(ctx.ac.order_reason || ORDER_DEFAULTS.reason, vars), legal: fillTemplate(ctx.ac.order_legal || ORDER_DEFAULTS.legal, vars),
+        closing: fillTemplate(ctx.ac.order_closing || ORDER_DEFAULTS.closing, vars), body: {} }]);
+      location.hash = `orders?id=${row.id}`;
+    } catch (err) { toast(`สร้างคำสั่งไม่สำเร็จ: ${err.message}`, 'err'); }
   });
   $('#o-special', el)?.addEventListener('click', async () => {
     const r = await modal('คำสั่งเฉพาะกิจ', `<p class="hint">เลือกแบบตั้งต้น แล้วแก้ไขรายละเอียดได้ทั้งหมด</p>
