@@ -57,6 +57,7 @@ async function loadContext(userId) {
 // ---------------------------------------------------------------------
 function loginCover(sub) {
   return `<div class="login-cover">
+    <a class="login-back" href="../" title="กลับหน้าทางเข้า Wangluek (Y.N.) Connected">← กลับหน้าทางเข้า</a>
     <img class="banner" src="img/banner.jpg" alt="${esc(BRAND.name)} — ${esc(BRAND.tagline)}">
     <ul><li>เก็บคลังงานวิชาการ 17 งาน พร้อมขอบข่ายหน้าที่</li><li>จัดภาระงานครูอย่างสมดุล เห็นชัดว่าใครรับกี่งาน</li>
       <li>ออกคำสั่งราชการ A4 ตามระเบียบงานสารบรรณ พิมพ์ PDF หรือส่งออก Word</li></ul>
