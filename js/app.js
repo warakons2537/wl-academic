@@ -60,7 +60,7 @@ function loginCover(sub) {
     <img class="banner" src="img/banner.jpg" alt="${esc(BRAND.name)} — ${esc(BRAND.tagline)}">
     <ul><li>เก็บคลังงานวิชาการ 17 งาน พร้อมขอบข่ายหน้าที่</li><li>จัดภาระงานครูอย่างสมดุล เห็นชัดว่าใครรับกี่งาน</li>
       <li>ออกคำสั่งราชการ A4 ตามระเบียบงานสารบรรณ พิมพ์ PDF หรือส่งออก Word</li></ul>
-    <small style="opacity:.8">${sub}</small></div>`;
+    <small style="opacity:.8">${sub} · เวอร์ชัน ${esc(BRAND.version)}</small></div>`;
 }
 
 function renderLogin() {
@@ -149,7 +149,8 @@ function renderShell(ctx) {
             <button class="btn btn-sm" id="logout" title="ออกจากระบบ" aria-label="ออกจากระบบ">${icon('logout')}</button></div>
         </header>
         <div class="main-pad">${db.mode === 'demo' ? `<div class="demo-bar no-print"><span><b>โหมดทดลอง</b> ข้อมูลตัวอย่าง (ชื่อสมมติ) เก็บในเบราว์เซอร์นี้เท่านั้น</span>
-        <button class="btn btn-sm" id="demo-reset">ล้างข้อมูลทดลอง</button></div>` : ''}<div class="main-inner" id="view"></div></div></main>
+        <button class="btn btn-sm" id="demo-reset">ล้างข้อมูลทดลอง</button></div>` : ''}<div class="main-inner" id="view"></div></div>
+        <footer class="app-ver no-print">${esc(BRAND.name)} เวอร์ชัน ${esc(BRAND.version)}</footer></main>
     </div>
     <div id="bnav-root"></div>`;
   navCtl = mountNav($('#bnav-root'), { labels: NAV, bar: BAR, more: MORE, ext: BRAND.siblings });

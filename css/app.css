@@ -390,6 +390,7 @@ table.mx { border-collapse: separate; border-spacing: 0; font-size: .86rem; }
 
 /* คำสั่ง */
 .order-list { display: flex; flex-direction: column; gap: 8px; }
+.app-ver { padding: 4px 16px 18px; text-align: center; font-size: .74rem; color: var(--ink-soft); opacity: .8; }
 .order-row { display: flex; gap: 8px; align-items: stretch; }
 .order-row .order-item { flex: 1; min-width: 0; }
 .order-row .btn-icon { flex: none; width: 44px; padding: 0; justify-content: center; }
