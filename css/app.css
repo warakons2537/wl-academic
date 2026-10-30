@@ -507,6 +507,12 @@ ul.log a svg.i { width: 14px; height: 14px; vertical-align: -2px; }
   margin-bottom: 0; font-size: .9rem; white-space: nowrap; }
 .tabs-pill button:hover { background: var(--surface-high); }
 .tabs-pill button.on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+/* ตัวเลือกสลับแบบแคปซูล (เหมือน .seg ของ WL Admin) — .seg2 เดิมยังใช้ในหน้าที่ยังไม่ปรับ */
+.seg { display: inline-flex; border: 1px solid var(--outline); border-radius: 99px; overflow: hidden; background: transparent; }
+.seg button { border: 0; border-left: 1px solid var(--outline); background: transparent; min-height: 40px; padding: 6px 14px; cursor: pointer; font-size: .85rem; color: var(--ink-soft); }
+.seg button:first-child { border-left: 0; }
+.seg button:hover { background: var(--paper); color: var(--ink); }
+.seg button.on { background: var(--chosen); color: var(--on-chosen); font-weight: 700; }
 @media (max-width: 600px) { .hide-sm { display: none; } }
 @media (max-width: 600px) {
   .tbl.tbl-card, .tbl-card tbody { display: block; }

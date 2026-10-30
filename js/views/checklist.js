@@ -40,7 +40,7 @@ export async function render(el, ctx) {
     el.innerHTML = `<div class="no-print stack" style="gap:20px">
       <div class="page-head"><div><h1>เช็กการส่งงานครู</h1><p>ปีการศึกษา ${ctx.year} · ${items.length} รายการ · ครู ${ppl.length} คน</p></div>
         <div class="toolbar">
-          <span class="seg2">${['1', '2'].map((t) => `<button data-term="${t}" class="${term === t ? 'on' : ''}">ภาคเรียนที่ ${t}</button>`).join('')}</span>
+          <span class="seg">${['1', '2'].map((t) => `<button data-term="${t}" class="${term === t ? 'on' : ''}">ภาคเรียนที่ ${t}</button>`).join('')}</span>
           ${ctx.canEdit ? `<button class="btn ${manage ? 'btn-primary' : ''}" id="c-manage">${icon('edit')} จัดการรายการ</button>` : ''}
           ${items.length ? `<button class="btn" id="c-print-sum">${icon('print')} พิมพ์ตารางสรุป</button><button class="btn" id="c-print-slip">${icon('print')} ใบแจ้งงานค้าง</button>` : ''}
         </div></div>
@@ -55,7 +55,7 @@ export async function render(el, ctx) {
         ${canSubmit ? myCard(items) : ''}
         <div class="toolbar">
           <span class="legend-row grow">${Object.values(SUBMIT).map((s) => `<span><span class="sw ${s.cls}">${s.mark}</span>${s.label}</span>`).join('')}<span><span class="sw sb-none od">✕</span>เลยกำหนด</span></span>
-          ${ctx.canEdit ? `<span class="small muted">คลิกช่อง =</span><span class="seg2"><button data-mode="cycle" class="${mode === 'cycle' ? 'on' : ''}">เปลี่ยนสถานะ</button><button data-mode="detail" class="${mode === 'detail' ? 'on' : ''}">ดู/แก้รายละเอียด</button></span>` : ''}
+          ${ctx.canEdit ? `<span class="small muted">คลิกช่อง =</span><span class="seg"><button data-mode="cycle" class="${mode === 'cycle' ? 'on' : ''}">เปลี่ยนสถานะ</button><button data-mode="detail" class="${mode === 'detail' ? 'on' : ''}">ดู/แก้รายละเอียด</button></span>` : ''}
         </div>
         ${ctx.canEdit ? `<p class="hint" style="margin-top:-12px">${mode === 'cycle' ? 'คลิกวน: ยังไม่ส่ง → รอตรวจ → ผ่าน → ไม่เกี่ยวข้อง · คลิกขวา/กดค้าง = รายละเอียด (ลิงก์งาน หมายเหตุ ส่งกลับแก้ไข)' : 'คลิกช่องเพื่อใส่ลิงก์งาน วันที่ส่ง หมายเหตุ หรือส่งกลับแก้ไข'}</p>` : ''}
         <div class="mx-wrap"><table class="mx ck">
@@ -91,11 +91,11 @@ export async function render(el, ctx) {
     return `<div class="card"><div class="toolbar"><h2 class="grow">รายการเอกสาร ภาคเรียนที่ ${term}/${ctx.year}</h2>
         <button class="btn btn-primary" data-add>${icon('plus')} เพิ่มรายการ</button></div>
       <p class="hint">รายการ "ทั้งปี" แสดงทั้ง 2 ภาคเรียนและใช้ผลการส่งชุดเดียวกัน</p>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>รายการ</th><th>รอบ</th><th>กำหนดส่ง</th><th></th></tr></thead><tbody>
-      ${items.map((i, k) => `<tr data-row="${i.id}"><td><input type="text" data-e="name" value="${esc(i.name)}" style="width:100%"></td>
-        <td><select data-e="period">${Object.entries(PERIODS).map(([v, l]) => `<option value="${v}" ${i.period === v ? 'selected' : ''}>${v === 'year' ? 'ทั้งปี' : l}</option>`).join('')}</select></td>
-        <td><input type="date" data-e="due_date" value="${esc(i.due_date || '')}"></td>
-        <td class="nowrap" style="text-align:right"><button class="icon-btn" data-mv="-1" ${k ? '' : 'disabled'} title="เลื่อนขึ้น">${icon('up')}</button>
+      <div class="tbl-wrap"><table class="tbl tbl-card"><thead><tr><th>รายการ</th><th>รอบ</th><th>กำหนดส่ง</th><th></th></tr></thead><tbody>
+      ${items.map((i, k) => `<tr data-row="${i.id}"><td class="tc-ttl"><input type="text" data-e="name" value="${esc(i.name)}" style="width:100%"></td>
+        <td data-l="รอบ"><select data-e="period">${Object.entries(PERIODS).map(([v, l]) => `<option value="${v}" ${i.period === v ? 'selected' : ''}>${v === 'year' ? 'ทั้งปี' : l}</option>`).join('')}</select></td>
+        <td data-l="กำหนดส่ง"><input type="date" data-e="due_date" value="${esc(i.due_date || '')}"></td>
+        <td class="nowrap n tc-act"><button class="icon-btn" data-mv="-1" ${k ? '' : 'disabled'} title="เลื่อนขึ้น">${icon('up')}</button>
           <button class="icon-btn" data-mv="1" ${k < items.length - 1 ? '' : 'disabled'} title="เลื่อนลง">${icon('down')}</button>
           <button class="icon-btn danger" data-del title="ลบ">${icon('trash')}</button></td></tr>`).join('')}
       </tbody></table></div></div>`;
@@ -104,12 +104,12 @@ export async function render(el, ctx) {
   function myCard(items) {
     const me = ctx.myStaff;
     return `<div class="card mine"><h2>งานของฉัน — ${esc(staffName(me))}</h2>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>รายการ</th><th>กำหนดส่ง</th><th>สถานะ</th><th></th></tr></thead><tbody>
+      <div class="tbl-wrap"><table class="tbl tbl-card"><thead><tr><th>รายการ</th><th>กำหนดส่ง</th><th>สถานะ</th><th></th></tr></thead><tbody>
       ${items.map((i) => { const st = subStatus(subs, i.id, me.id); const row = subOf(i.id, me.id); const od = isSubOverdue(i, st, today);
-        return `<tr><td>${esc(i.name)}${row?.review_note ? `<span class="sub" style="color:var(--amber)">ผู้ตรวจ: ${esc(row.review_note)}</span>` : ''}</td>
-          <td class="nowrap" style="${od ? 'color:var(--red);font-weight:600' : ''}">${i.due_date ? thaiDate(i.due_date, true) : '-'}</td>
+        return `<tr><td class="tc-ttl">${esc(i.name)}${row?.review_note ? `<span class="sub" style="color:var(--amber)">ผู้ตรวจ: ${esc(row.review_note)}</span>` : ''}</td>
+          <td class="nowrap" data-l="กำหนดส่ง" style="${od ? 'color:var(--red);font-weight:600' : ''}">${i.due_date ? thaiDate(i.due_date, true) : '-'}</td>
           <td><span class="chip ${SUBMIT[st].cls}">${SUBMIT[st].mark} ${SUBMIT[st].label}</span></td>
-          <td style="text-align:right">${st === 'na' || st === 'passed' ? '' : `<button class="btn btn-sm ${st === 'none' || st === 'returned' ? 'btn-primary' : ''}" data-mine="${i.id}">${st === 'submitted' ? 'แก้ไขการส่ง' : 'ส่งงาน'}</button>`}</td></tr>`; }).join('')}
+          <td class="n tc-act">${st === 'na' || st === 'passed' ? '' : `<button class="btn btn-sm ${st === 'none' || st === 'returned' ? 'btn-primary' : ''}" data-mine="${i.id}">${st === 'submitted' ? 'แก้ไขการส่ง' : 'ส่งงาน'}</button>`}</td></tr>`; }).join('')}
       </tbody></table></div></div>`;
   }
 
