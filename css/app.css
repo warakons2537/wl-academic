@@ -390,6 +390,9 @@ table.mx { border-collapse: separate; border-spacing: 0; font-size: .86rem; }
 
 /* คำสั่ง */
 .order-list { display: flex; flex-direction: column; gap: 8px; }
+.order-row { display: flex; gap: 8px; align-items: stretch; }
+.order-row .order-item { flex: 1; min-width: 0; }
+.order-row .btn-icon { flex: none; width: 44px; padding: 0; justify-content: center; }
 .order-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 14px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r-lg); cursor: pointer; text-align: left; width: 100%; }
 .order-item:hover { border-color: var(--pen); }
 .order-item .no { font-family: var(--font-display); font-weight: 700; color: var(--pen); min-width: 70px; }

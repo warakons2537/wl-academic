@@ -37,14 +37,20 @@ async function list(el, ctx) {
     <div class="page-head"><div><h1>ออกคำสั่ง</h1><p>ปีการศึกษา ${ctx.year} · คำสั่งตามแบบงานสารบรรณ พิมพ์ A4 / PDF หรือดาวน์โหลด Word</p></div>
       ${ctx.canEdit ? `<div class="toolbar"><button class="btn" id="o-special">${icon('plus')} คำสั่งเฉพาะกิจ</button>
         <button class="btn btn-primary" id="o-annual">${icon('plus')} คำสั่งมอบหมายงานประจำปี</button></div>` : ''}</div>
-    ${orders.length ? `<div class="order-list">${orders.map((o) => `<button class="order-item" data-id="${o.id}">
+    ${orders.length ? `<div class="order-list">${orders.map((o) => `<div class="order-row"><button class="order-item" data-id="${o.id}">
         <span class="no">${esc(o.number || '—')}</span>
         <span style="min-width:0"><span class="t">${esc(o.title || '(ไม่มีชื่อเรื่อง)')}</span>
           <small>${o.kind === 'annual' ? 'มอบหมายงานประจำปี' : 'เฉพาะกิจ'} · ${o.signed_date ? `สั่ง ณ ${thaiDate(o.signed_date)}` : 'ยังไม่ระบุวันที่'}</small></span>
-        <span class="chip ${o.status === 'issued' ? 'chip-ok' : 'chip-warn'}">${o.status === 'issued' ? `${icon('lock')} ออกแล้ว` : 'ฉบับร่าง'}</span></button>`).join('')}</div>`
+        <span class="chip ${o.status === 'issued' ? 'chip-ok' : 'chip-warn'}">${o.status === 'issued' ? `${icon('lock')} ออกแล้ว` : 'ฉบับร่าง'}</span></button>${ctx.canEdit ? `<button class="btn btn-danger btn-icon" data-del="${o.id}" title="ลบคำสั่ง" aria-label="ลบคำสั่ง">${icon('trash')}</button>` : ''}</div>`).join('')}</div>`
     : `<div class="empty">ยังไม่มีคำสั่งในปีการศึกษา ${ctx.year}${ctx.canEdit ? '<br>เริ่มจาก "คำสั่งมอบหมายงานประจำปี" ซึ่งดึงรายชื่อจากหน้าจัดภาระงานให้อัตโนมัติ' : ''}</div>`}`;
 
   $$('[data-id]', el).forEach((b) => b.addEventListener('click', () => { location.hash = `orders?id=${b.dataset.id}`; }));
+  $$('[data-del]', el).forEach((b) => b.addEventListener('click', async () => {
+    const o = orders.find((x) => x.id === b.dataset.del);
+    if (!(await confirmBox(`ลบคำสั่ง ที่ ${o.number || '-'} "${o.title || '(ไม่มีชื่อเรื่อง)'}"?${o.status === 'issued' ? ' (คำสั่งนี้ออกแล้ว)' : ''} ลบแล้วกู้คืนไม่ได้`, 'ลบ'))) return;
+    try { await ctx.db.remove('ac_orders', { id: o.id }); toast('ลบคำสั่งแล้ว'); list(el, ctx); }
+    catch (err) { toast(`ลบคำสั่งไม่สำเร็จ: ${err.message}`, 'err'); }
+  }));
   const vars = { ปี: String(ctx.year), โรงเรียน: ctx.schoolName };
   const base = () => ({
     academic_year: ctx.year, number: `…/${ctx.year}`, signed_date: todayIso(),
