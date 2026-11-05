@@ -15,28 +15,46 @@ import { membersOf } from './data.js';
 export const shortTitle = (s) => (/^(รอง)?ผู้อำนวยการ/.test(s?.position || '') ? s.position : (s?.academic_rank || s?.position || ''));
 
 // ---------- 1) รวบรวมข้อมูลของคำสั่ง (ชื่อคน ณ ตอนนี้) ----------
-export function resolveAnnual(year, staffById) {
-  return year.tasks.map((t) => ({
-    name: t.name,
-    duties: splitLines(t.duties),
-    members: membersOf(t.id, year.assignments, staffById).map((m) => ({
-      name: staffName(m.staff), title: shortTitle(m.staff), role: ROLES[m.role].label })),
-  }));
+// over = order.body.members : { [taskId]: { hide:[staffId], edit:{[staffId]:{name,title,role}}, add:[{id,staff_id?,name,title,role}] } }
+// ปรับรายชื่อเฉพาะในคำสั่งฉบับนี้ ไม่แตะข้อมูลหน้าจัดภาระงาน
+export function resolveAnnual(year, staffById, over = {}) {
+  return year.tasks.map((t) => {
+    const ov = over?.[t.id] || {};
+    const hide = new Set(ov.hide || []); const edits = ov.edit || {};
+    const all = membersOf(t.id, year.assignments, staffById);
+    const kept = all.filter((m) => !hide.has(m.staff.id)).map((m) => {
+      const e = edits[m.staff.id] || {};
+      return { name: e.name?.trim() || staffName(m.staff), title: e.title !== undefined ? e.title : shortTitle(m.staff),
+        role: e.role !== undefined ? e.role : ROLES[m.role].label, ref: { k: 'a', t: t.id, id: m.staff.id } };
+    });
+    const added = (ov.add || []).map((a) => {
+      const s = a.staff_id && staffById[a.staff_id];
+      return { name: a.name?.trim() || (s ? staffName(s) : ''), title: a.title !== undefined ? a.title : (s ? shortTitle(s) : ''),
+        role: a.role !== undefined ? a.role : 'กรรมการ', ref: { k: 'a', t: t.id, id: a.id, add: true } };
+    }).filter((m) => m.name);
+    return { id: t.id, name: t.name, duties: splitLines(t.duties), members: [...kept, ...added],
+      hidden: all.filter((m) => hide.has(m.staff.id)).map((m) => ({ id: m.staff.id, name: staffName(m.staff) })) };
+  });
 }
 
 export function resolveSpecial(order, staffById) {
-  return (order.body?.committees || []).map((c) => ({
+  return (order.body?.committees || []).map((c, ci) => ({
     name: c.name || '',
     duties: splitLines(c.duties),
-    members: (c.members || []).map((m) => {
+    members: (c.members || []).map((m, mi) => {
       const s = m.staff_id && staffById[m.staff_id];
-      return s ? { name: staffName(s), title: shortTitle(s), role: m.role || '' }
-        : { name: m.name || '', title: m.position || '', role: m.role || '' };
+      const ref = { k: 's', c: ci, m: mi };
+      return s ? { name: m.name?.trim() || staffName(s), title: m.position !== undefined ? m.position : shortTitle(s), role: m.role || '', ref }
+        : { name: m.name || '', title: m.position || '', role: m.role || '', ref };
     }).filter((m) => m.name),
   }));
 }
 
 export const splitLines = (t) => String(t || '').split('\n').map((x) => x.replace(/^\s*(\(?[0-9๐-๙]+[.)]\s*|[-•]\s*)/, '').trim()).filter(Boolean);
+
+// ย่อหน้าตามระเบียบ: บรรทัดแรกเว้น 2.5 ซม. · first = เยื้องบรรทัดแรก, left = เยื้องทั้งย่อหน้า (ซม.)
+export const INDENT_DEFAULT = { first: 2.5, left: 0 };
+export const clampIndent = (v, lo = 0, hi = 8) => Math.min(hi, Math.max(lo, Math.round((Number(v) || 0) * 4) / 4));
 
 // ---------- 2) แบบจำลองเอกสาร ----------
 // sections = ผลจาก resolve*, meta = { schoolName }
@@ -50,35 +68,43 @@ export function buildModel(order, sections, meta) {
   B.push({ type: 'center', text: D(`ที่ ${order.number || '……/……'}`) });
   B.push({ type: 'center', text: D(`เรื่อง ${order.title || '……………'}`) });
   B.push({ type: 'rule' });
-  for (const p of [order.reason, order.legal]) if (p?.trim()) B.push({ type: 'para', text: D(p.trim()), space: true });
+  const P = order.options?.para || {};
+  const para = (key, extra = {}) => {
+    const t = order[key];
+    if (!t?.trim()) return;
+    const p = P[key] || {};
+    B.push({ type: 'para', key, text: D(t.trim()), space: true, first: p.first ?? INDENT_DEFAULT.first, left: p.left ?? INDENT_DEFAULT.left, ...extra });
+  };
+  para('reason'); para('legal');
 
   sections.forEach((sec, i) => {
     const no = i + 1;
     B.push({ type: 'heading', no: D(`${no}.`), text: D(sec.name), keep: true });
     if (!sec.members.length) B.push({ type: 'member', no: '', name: '(ยังไม่ได้มอบหมาย)', title: '', role: '', empty: true });
-    sec.members.forEach((m, k) => B.push({ type: 'member', no: D(`${no}.${k + 1}`), name: D(m.name), title: D(m.title), role: D(m.role) }));
+    sec.members.forEach((m, k) => B.push({ type: 'member', no: D(`${no}.${k + 1}`), name: D(m.name), title: D(m.title), role: D(m.role), ref: m.ref }));
     if (showDuties && sec.duties.length) {
       B.push({ type: 'dutyLabel', text: 'มีหน้าที่', keep: true });
       sec.duties.forEach((d, k) => B.push({ type: 'duty', no: D(`(${k + 1})`), text: D(d) }));
     }
   });
 
-  if (order.closing?.trim()) B.push({ type: 'para', text: D(order.closing.trim()), space: true });
-  if (order.effective_text?.trim()) B.push({ type: 'para', text: D(order.effective_text.trim()), space: true, keep: true });
+  para('closing'); para('effective_text', { keep: true });
   B.push({ type: 'sign', when: D(`สั่ง ณ วันที่ ${order.signed_date ? orderDate(order.signed_date) : '……… เดือน ……………… พ.ศ. ………'}`),
     name: D(`(${order.signer_name || '……………………………'})`), title: D(order.signer_title || 'ผู้อำนวยการโรงเรียน') });
   return { blocks: B, numerals: mode };
 }
 
 // ---------- 3) HTML ของแต่ละบล็อก ----------
-export function blockHtml(b, { garuda } = {}) {
+const ed = (b, field, editable) => (editable && b.ref
+  ? ` class="ed" contenteditable="true" spellcheck="false" data-ed="${esc(JSON.stringify({ ...b.ref, f: field }))}"` : '');
+export function blockHtml(b, { garuda, editable } = {}) {
   switch (b.type) {
     case 'garuda': return `<div class="b garuda">${garuda ? `<img src="${esc(garuda)}" alt="ตราครุฑ">` : '<span class="ph">ตราครุฑ<br>(อัปโหลดใน<br>ข้อมูลพื้นฐาน)</span>'}</div>`;
     case 'center': return `<div class="b c">${esc(b.text)}</div>`;
     case 'rule': return '<div class="b rule"><span></span></div>';
-    case 'para': return `<div class="b p${b.space ? ' sp' : ''}">${esc(b.text)}</div>`;
+    case 'para': return `<div class="b p${b.space ? ' sp' : ''}${editable && b.key ? ' ed' : ''}" style="text-indent:${b.first}cm;padding-left:${b.left}cm"${editable && b.key ? ` contenteditable="true" spellcheck="false" data-pkey="${b.key}"` : ''}>${esc(b.text)}</div>`;
     case 'heading': return `<div class="b h"><span>${esc(b.no)}</span><span>${esc(b.text)}</span></div>`;
-    case 'member': return `<div class="b m"><span>${esc(b.no)}</span><span>${b.empty ? `<i style="color:#b3261e">${esc(b.name)}</i>` : esc(b.name)}</span><span>${esc(b.title)}</span><span>${esc(b.role)}</span></div>`;
+    case 'member': return `<div class="b m"><span>${esc(b.no)}</span><span>${b.empty ? `<i style="color:#b3261e">${esc(b.name)}</i>` : `<span${ed(b, 'name', editable)}>${esc(b.name)}</span>`}</span><span><span${ed(b, 'title', editable)}>${esc(b.title)}</span></span><span><span${ed(b, 'role', editable)}>${esc(b.role)}</span></span></div>`;
     case 'dutyLabel': return `<div class="b dl">${esc(b.text)}</div>`;
     case 'duty': return `<div class="b d"><span class="n">${esc(b.no)}</span>${esc(b.text)}</div>`;
     case 'sign': return `<div class="b sign"><div class="when">${esc(b.when)}</div><div class="who">${esc(b.name)}<br>${esc(b.title)}</div></div>`;
@@ -121,10 +147,10 @@ export function hasThaiOfficialFont() {
 }
 
 // วาดเอกสารเป็นหน้า A4 ลงใน el (คืนจำนวนหน้า)
-export async function renderPages(el, model, { garuda } = {}) {
+export async function renderPages(el, model, { garuda, editable = false } = {}) {
   try { await document.fonts.ready; } catch { /* */ }
   const fallback = !hasThaiOfficialFont();
-  const htmls = model.blocks.map((b) => blockHtml(b, { garuda }));
+  const htmls = model.blocks.map((b) => blockHtml(b, { garuda, editable }));
   const meas = document.createElement('div');
   meas.className = `doc-measure${fallback ? ' fallback' : ''}`;
   meas.innerHTML = htmls.join('');

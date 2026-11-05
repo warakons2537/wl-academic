@@ -73,6 +73,12 @@ function imageXml(img) {
 </a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
 }
 
+// เยื้องย่อหน้า: first < 0 = ย่อหน้าแขวน (hanging)
+const paraInd = (b) => {
+  const first = b.first ?? 2.5; const left = b.left ?? 0;
+  return `${left ? `w:left="${tw(left)}" ` : ''}${first < 0 ? `w:hanging="${tw(-first)}"` : `w:firstLine="${tw(first)}"`}`;
+};
+
 // แปลงบล็อกเป็นย่อหน้า Word
 function blockXml(b, img) {
   const SP = 120; // ระยะก่อนย่อหน้า 6 พอยต์
@@ -80,7 +86,7 @@ function blockXml(b, img) {
     case 'garuda': return img ? para({ jc: 'center', keep: true }, imageXml(img)) : '';
     case 'center': return para({ jc: 'center', keep: true }, run(b.text));
     case 'rule': return para({ jc: 'center', keep: true, border: true, ind: `w:left="${tw(5.25)}" w:right="${tw(5.25)}"` }, '') + para({ keep: true }, '');
-    case 'para': return para({ jc: 'thaiDistribute', ind: `w:firstLine="${tw(2.5)}"`, before: b.space ? SP : 0, keep: b.keep }, run(b.text));
+    case 'para': return para({ jc: 'thaiDistribute', ind: paraInd(b), before: b.space ? SP : 0, keep: b.keep }, run(b.text));
     case 'heading': return para({ keep: true, before: SP, ind: `w:left="${tw(3.5)}" w:hanging="${tw(1)}"`, tabs: [tw(3.5)] }, run(b.no, { b: true }) + tab + run(b.text, { b: true }));
     case 'member': return memberRow(b);
     case 'dutyLabel': return para({ keep: true, ind: `w:left="${tw(3.5)}"` }, run(b.text));

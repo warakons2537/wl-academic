@@ -3,7 +3,7 @@ import { icon } from '../icons.js';
 import { ORDER_DEFAULTS } from '../task-sets.js';
 import { loadYear, membersOf, taskWarnings } from '../data.js';
 import { staffName, fillTemplate, digits } from '../thai.js';
-import { buildModel, resolveAnnual, resolveSpecial, renderPages } from '../order-doc.js';
+import { shortTitle, buildModel, resolveAnnual, resolveSpecial, renderPages, INDENT_DEFAULT, clampIndent } from '../order-doc.js';
 import { buildDocx, imageFromDataUrl, downloadBytes } from '../docx.js';
 
 const idFromHash = () => new URLSearchParams(location.hash.split('?')[1] || '').get('id');
@@ -91,7 +91,7 @@ async function editor(el, ctx, id) {
   const locked = () => o.status === 'issued' || !ctx.canEdit;
 
   const sections = () => (o.status === 'issued' && o.snapshot ? o.snapshot.sections
-    : o.kind === 'annual' ? resolveAnnual(year, ctx.staffById) : resolveSpecial(o, ctx.staffById));
+    : o.kind === 'annual' ? resolveAnnual(year, ctx.staffById, o.body?.members) : resolveSpecial(o, ctx.staffById));
   const meta = () => (o.status === 'issued' && o.snapshot ? o.snapshot.meta : { schoolName: ctx.schoolName });
   const model = () => buildModel(o, sections(), meta());
 
@@ -111,7 +111,9 @@ async function editor(el, ctx, id) {
       ${area('legal', 'ย่อหน้าข้อกฎหมาย / อาศัยอำนาจ', 4)}
       ${o.kind === 'annual'
         ? `<div class="note-box">รายชื่อและบทบาทดึงจาก <a href="#workload">จัดภาระงาน</a> ปีการศึกษา ${o.academic_year} อัตโนมัติ
-            (${year.tasks.length} งาน)${warn ? `<br><b style="color:var(--amber)">⚠ ${warn} งานยังจัดคนไม่ครบ</b>` : ''}</div>`
+            (${year.tasks.length} งาน)${warn ? `<br><b style="color:var(--amber)">⚠ ${warn} งานยังจัดคนไม่ครบ</b>` : ''}<br>
+            ปรับชื่อ/ตำแหน่ง เพิ่มหรือนำครูออกเฉพาะในคำสั่งนี้ได้ด้านล่าง หรือคลิกแก้บนหน้ากระดาษโดยตรง (ไม่กระทบหน้าจัดภาระงาน)</div>
+          <div id="o-members" class="stack"></div>`
         : '<div id="o-comms" class="stack"></div>'}
       ${area('closing', 'ย่อหน้าปิดท้าย', 3)}
       ${field('effective_text', 'ทั้งนี้ ตั้งแต่…')}
@@ -131,7 +133,7 @@ async function editor(el, ctx, id) {
         <button class="btn" id="o-dup">${icon('copy')} ทำสำเนา</button>
         <span class="grow"></span><button class="btn btn-danger" id="o-del">${icon('trash')}</button></div>` : ''}`;
 
-    if (o.kind === 'special') drawCommittees();
+    if (o.kind === 'special') drawCommittees(); else drawMembers();
     $$('input[name], textarea[name]', $('#o-form', el)).forEach((inp) => inp.addEventListener('input', () => { o[inp.name] = inp.value; queueSave(); }));
     $$('[data-num]', el).forEach((b) => b.addEventListener('click', () => { o.options = { ...o.options, numerals: b.dataset.num }; queueSave(true); drawForm(); }));
     $('#o-duties', el).addEventListener('change', (e) => { o.options = { ...o.options, show_duties: e.target.checked }; queueSave(true); });
@@ -158,6 +160,7 @@ async function editor(el, ctx, id) {
           ${m.staff_id !== undefined && m.staff_id !== null ? `<select data-mf="staff_id" ${dis}>${active.map((s) => `<option value="${s.id}" ${s.id === m.staff_id ? 'selected' : ''}>${esc(staffName(s))}</option>`).join('')}
               ${m.staff_id && !active.some((s) => s.id === m.staff_id) ? `<option selected value="${esc(m.staff_id)}">${esc(staffName(ctx.staffById[m.staff_id]) || '(ไม่พบ)')}</option>` : ''}</select>`
             : `<input type="text" data-mf="name" value="${esc(m.name || '')}" placeholder="ชื่อ-สกุล (บุคคลภายนอก)" ${dis}>`}
+          <input type="text" data-mf="position" value="${esc(m.position ?? '')}" placeholder="${esc(m.staff_id ? (shortTitle(ctx.staffById[m.staff_id]) || 'ตำแหน่ง') : 'ตำแหน่ง')}" ${dis}>
           <input type="text" data-mf="role" list="dl-roles" value="${esc(m.role || '')}" placeholder="บทบาท" ${dis}>
           ${locked() ? '' : `<button class="icon-btn danger" data-mdel="${k}" title="นำออก">${icon('trash')}</button>`}</div>`).join('')}
         ${locked() ? '' : `<div class="toolbar"><button type="button" class="btn btn-sm" data-madd="${i}">${icon('users')} เลือกบุคลากร</button>
@@ -173,7 +176,11 @@ async function editor(el, ctx, id) {
       const i = Number(card.dataset.c);
       $$('[data-f]', card).forEach((inp) => inp.addEventListener('input', () => { C()[i][inp.dataset.f] = inp.value; changed(); }));
       $$('.mem', card).forEach((row) => { const k = Number(row.dataset.m);
-        $$('[data-mf]', row).forEach((inp) => inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', () => { C()[i].members[k][inp.dataset.mf] = inp.value; changed(); })); });
+        $$('[data-mf]', row).forEach((inp) => inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', () => {
+          const mm = C()[i].members[k]; mm[inp.dataset.mf] = inp.value;
+          if (inp.dataset.mf === 'staff_id') { delete mm.name; delete mm.position; changed(true); return; }   // เปลี่ยนคน → ล้างชื่อ/ตำแหน่งที่แก้ไว้
+          if (inp.dataset.mf === 'position' && inp.value === '') delete mm.position;
+          changed(); })); });
     });
     $$('[data-cdel]', box).forEach((b) => b.addEventListener('click', () => { C().splice(Number(b.dataset.cdel), 1); changed(true); }));
     $$('[data-cup]', box).forEach((b) => b.addEventListener('click', () => { const i = Number(b.dataset.cup); const c = C(); [c[i - 1], c[i]] = [c[i], c[i - 1]]; changed(true); }));
@@ -191,15 +198,77 @@ async function editor(el, ctx, id) {
     $('#c-add', box)?.addEventListener('click', () => { C().push({ name: '', duties: '', members: [] }); changed(true); });
   }
 
+  // ---------- รายชื่อในคำสั่งประจำปี (ปรับเฉพาะคำสั่งนี้) ----------
+  const newId = () => (globalThis.crypto?.randomUUID?.() || `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`);
+  const MO = (tid) => (((o.body ||= {}).members ||= {})[tid] ||= {});
+  function drawMembers() {
+    const box = $('#o-members', el); if (!box) return;
+    const dis = locked() ? 'disabled' : '';
+    const secs = sections();
+    const open = new Set($$('details[open]', box).map((d) => d.dataset.t));
+    box.innerHTML = secs.map((sec, i) => `<details class="mgroup" data-t="${esc(sec.id || i)}" ${open.has(sec.id || i) ? 'open' : ''}>
+        <summary>${i + 1}. ${esc(sec.name)} <span class="muted small">(${sec.members.length} คน)</span></summary>
+        ${sec.members.map((m) => `<div class="mrow" data-ref="${esc(JSON.stringify(m.ref))}">
+          <input type="text" data-f="name" value="${esc(m.name)}" placeholder="ชื่อ-สกุล" ${dis}>
+          <input type="text" data-f="title" value="${esc(m.title)}" placeholder="ตำแหน่ง" ${dis}>
+          <input type="text" data-f="role" list="dl-roles3" value="${esc(m.role)}" placeholder="บทบาท" ${dis}>
+          ${locked() ? '<span></span>' : `<button type="button" class="icon-btn danger" data-rm title="นำออกจากคำสั่งนี้">${icon('trash')}</button>`}</div>`).join('')}
+        ${(sec.hidden || []).map((h) => `<div class="small muted">นำออกแล้ว: ${esc(h.name)} ${locked() ? '' : `<button type="button" class="btn btn-sm btn-ghost" data-restore="${esc(h.id)}">คืน</button>`}</div>`).join('')}
+        ${locked() ? '' : `<div class="toolbar"><button type="button" class="btn btn-sm" data-addstaff="${esc(sec.id)}">${icon('users')} เพิ่มครู</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-addext="${esc(sec.id)}">${icon('plus')} บุคคลอื่น</button></div>`}
+      </details>`).join('') + `<datalist id="dl-roles3">${ROLE_HINTS.map((r) => `<option>${r}</option>`).join('')}</datalist>`;
+
+    $$('.mrow', box).forEach((row) => {
+      if (!row.dataset.ref || row.dataset.ref === 'undefined') return;   // ภาพบันทึกเก่าไม่มีรหัสอ้างอิง
+      const ref = JSON.parse(row.dataset.ref);
+      $$('[data-f]', row).forEach((inp) => inp.addEventListener('input', () => { setMember(ref, inp.dataset.f, inp.value); queueSave(); }));
+      $('[data-rm]', row)?.addEventListener('click', () => {
+        const ov = MO(ref.t);
+        if (ref.add) ov.add = (ov.add || []).filter((a) => a.id !== ref.id);
+        else { ov.hide = [...new Set([...(ov.hide || []), ref.id])]; delete (ov.edit || {})[ref.id]; }
+        queueSave(true); drawMembers();
+      });
+    });
+    $$('[data-restore]', box).forEach((b) => b.addEventListener('click', () => {
+      const tid = b.closest('details').dataset.t; const ov = MO(tid); ov.hide = (ov.hide || []).filter((x) => x !== b.dataset.restore);
+      queueSave(true); drawMembers();
+    }));
+    $$('[data-addext]', box).forEach((b) => b.addEventListener('click', () => { (MO(b.dataset.addext).add ||= []).push({ id: newId(), name: '', title: '', role: 'กรรมการ' }); queueSave(true); drawMembers(); }));
+    $$('[data-addstaff]', box).forEach((b) => b.addEventListener('click', async () => {
+      const tid = b.dataset.addstaff; const active = ctx.staff.filter((x) => x.active);
+      const taken = new Set(sections().find((x) => x.id === tid).members.map((m) => m.ref.id));
+      const r = await modal('เพิ่มครูในคำสั่งนี้', `<label>บทบาท<input type="text" name="role" list="dl-roles3" value="กรรมการ"></label>
+        <div class="stack" style="gap:4px">${active.map((x) => `<label class="inline"><input type="checkbox" name="s_${x.id}" ${taken.has(x.id) ? 'disabled' : ''}> ${esc(staffName(x))} <span class="muted small">${esc(x.academic_rank || x.position)}</span></label>`).join('')}</div>`, { okText: 'เพิ่ม' });
+      if (!r) return;
+      const ov = MO(tid);
+      for (const x of active.filter((x) => r[`s_${x.id}`])) {
+        if ((ov.hide || []).includes(x.id)) ov.hide = ov.hide.filter((h) => h !== x.id);     // เคยนำออก → คืน
+        else (ov.add ||= []).push({ id: newId(), staff_id: x.id, role: r.role || 'กรรมการ' });
+      }
+      queueSave(true); drawMembers();
+    }));
+  }
+  // เขียนค่าที่แก้ไขของผู้รับผิดชอบหนึ่งคน (จากฟอร์มหรือจากหน้ากระดาษ)
+  function setMember(ref, field, value) {
+    if (ref.k === 's') {
+      const m = o.body.committees[ref.c].members[ref.m]; const key = field === 'title' ? 'position' : field;
+      if (value === '' && key !== 'role' && m.staff_id) delete m[key]; else m[key] = value;
+      return;
+    }
+    const ov = MO(ref.t);
+    if (ref.add) { const a = (ov.add || []).find((x) => x.id === ref.id); if (a) a[field] = value; return; }
+    ((ov.edit ||= {})[ref.id] ||= {})[field] = value;
+  }
+
   // ---------- บันทึกอัตโนมัติ ----------
   let timer = null; let pending = null;
   const status = (t) => { const s = $('#o-saved', el); if (s) s.textContent = t; };
-  function queueSave(now = false) {
+  function queueSave(now = false, preview = true) {
     if (locked()) return;
     status('กำลังบันทึก…');
     clearTimeout(timer);
     timer = setTimeout(() => { pending = save(); }, now ? 0 : 700);
-    schedulePreview();
+    if (preview) schedulePreview();
   }
   async function save() {
     const patch = { number: o.number, title: o.title, reason: o.reason, legal: o.legal, closing: o.closing, effective_text: o.effective_text,
@@ -211,10 +280,11 @@ async function editor(el, ctx, id) {
 
   // ---------- ตัวอย่าง ----------
   let pt = null;
-  const schedulePreview = () => { clearTimeout(pt); pt = setTimeout(drawPreview, 250); };
+  const schedulePreview = (ms = 250) => { clearTimeout(pt); pt = setTimeout(drawPreview, ms); };
   async function drawPreview() {
     const zoom = $('#o-pages', el); if (!zoom) return;
-    const info = await renderPages(zoom, model(), { garuda });
+    const info = await renderPages(zoom, model(), { garuda, editable: !locked() });
+    refreshBar();
     $('#o-pinfo', el).innerHTML = `${digits(info.pages, 'arabic')} หน้า${info.fallback ? ' · เครื่องนี้ไม่มีฟอนต์ TH SarabunPSK ตัวอย่างใช้ Sarabun ขนาดเทียบเท่า (ตำแหน่งบรรทัดอาจต่างเล็กน้อย) ไฟล์ Word ใช้ TH SarabunPSK' : ''}${garuda ? '' : ' · <a href="#basics?tab=garuda">ยังไม่มีตราครุฑ</a>'}`;
     fit();
   }
@@ -262,13 +332,84 @@ async function editor(el, ctx, id) {
     await ctx.db.remove('ac_orders', { id: o.id }); location.hash = 'orders';
   }
 
+  // ---------- แก้ไขบนหน้ากระดาษ + ย่อหน้า ----------
+  let selKey = null;
+  const paraOf = (k) => ({ ...INDENT_DEFAULT, ...(o.options?.para?.[k] || {}) });
+  const PARA_NAME = { reason: 'ย่อหน้าเหตุผล', legal: 'ย่อหน้าข้อกฎหมาย', closing: 'ย่อหน้าปิดท้าย', effective_text: 'ทั้งนี้ ตั้งแต่…' };
+  function refreshBar() {
+    const bar = $('#o-ibar', el); if (!bar) return;
+    const on = !!selKey && !locked();
+    bar.dataset.off = on ? '0' : '1';
+    $('#ib-name', el).textContent = selKey ? PARA_NAME[selKey] : 'คลิกย่อหน้าบนหน้ากระดาษเพื่อเลือก';
+    if (selKey) { const p = paraOf(selKey); $('#ib-first', el).value = p.first; $('#ib-left', el).value = p.left; }
+  }
+  function setIndent(patch) {
+    if (!selKey || locked()) return;
+    const cur = paraOf(selKey);
+    const left = clampIndent(patch.left ?? cur.left);
+    const first = clampIndent(patch.first ?? cur.first, -left, 8);
+    o.options = { ...o.options, para: { ...(o.options?.para || {}), [selKey]: { first, left } } };
+    const pe = $(`[data-pkey="${selKey}"]`, $('#o-pages', el));     // ปรับทันทีบนหน้า แล้วค่อยแบ่งหน้าใหม่
+    if (pe) { pe.style.textIndent = `${first}cm`; pe.style.paddingLeft = `${left}cm`; }
+    refreshBar(); queueSave();
+  }
+  function bindPageEditing() {
+    const pages = $('#o-pages', el);
+    pages.addEventListener('focusin', (e) => {
+      clearTimeout(pt);                                           // ย้ายไปแก้จุดอื่น ไม่วาดหน้าใหม่ทับ
+      const k = e.target.dataset?.pkey; if (k) { selKey = k; refreshBar(); }
+    });
+    pages.addEventListener('focusout', (e) => { if (e.target.isContentEditable && dirtyPage) { dirtyPage = false; schedulePreview(450); } });
+    pages.addEventListener('input', (e) => {
+      const t = e.target; if (locked() || !t.isContentEditable) return;
+      const text = t.innerText.replace(/\s*\n+\s*/g, ' ');
+      if (t.dataset.pkey) {
+        o[t.dataset.pkey] = text;
+        const f = $(`[name="${t.dataset.pkey}"]`, $('#o-form', el)); if (f) f.value = text;
+      } else if (t.dataset.ed) {
+        const d = JSON.parse(t.dataset.ed); setMember(d, d.f, text);
+        if (o.kind === 'annual') drawMembers(); else drawCommittees();
+      } else return;
+      dirtyPage = true; queueSave(false, false);
+    });
+    pages.addEventListener('keydown', (e) => {
+      const t = e.target; if (!t.isContentEditable) return;
+      if (e.key === 'Enter') { e.preventDefault(); t.blur(); return; }
+      if (e.key === 'Tab' && t.dataset.pkey) {                    // Tab / Shift+Tab = เพิ่ม/ลดย่อหน้า
+        e.preventDefault(); selKey = t.dataset.pkey;
+        setIndent({ first: paraOf(selKey).first + (e.shiftKey ? -0.5 : 0.5) });
+      }
+    });
+    pages.addEventListener('paste', (e) => {
+      if (!e.target.isContentEditable) return;
+      e.preventDefault(); document.execCommand('insertText', false, (e.clipboardData.getData('text/plain') || '').replace(/\s*\n+\s*/g, ' '));
+    });
+    const bar = $('#o-ibar', el);
+    bar.addEventListener('mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); });
+    $$('[data-ib]', bar).forEach((b) => b.addEventListener('click', () => {
+      const [fld, d] = b.dataset.ib.split(':'); setIndent({ [fld]: paraOf(selKey)[fld] + Number(d) });
+    }));
+    $('#ib-first', bar).addEventListener('change', (e) => setIndent({ first: e.target.value }));
+    $('#ib-left', bar).addEventListener('change', (e) => setIndent({ left: e.target.value }));
+    $('#ib-reset', bar).addEventListener('click', () => setIndent({ ...INDENT_DEFAULT }));
+  }
+  let dirtyPage = false;
+
   el.innerHTML = `<div class="editor">
       <div class="card form no-print" id="o-form"></div>
       <div class="stack print-area">
         <div class="hint no-print" id="o-pinfo"></div>
+        <div class="ibar no-print" id="o-ibar" data-off="1">
+          <b id="ib-name"></b>
+          <span class="step">บรรทัดแรก <button type="button" class="btn btn-sm" data-ib="first:-0.5" aria-label="ลดย่อหน้าบรรทัดแรก">−</button><input type="number" id="ib-first" step="0.25" min="-8" max="8"><button type="button" class="btn btn-sm" data-ib="first:0.5" aria-label="เพิ่มย่อหน้าบรรทัดแรก">+</button> ซม.</span>
+          <span class="step">เยื้องทั้งย่อหน้า <button type="button" class="btn btn-sm" data-ib="left:-0.5" aria-label="ลดการเยื้อง">−</button><input type="number" id="ib-left" step="0.25" min="0" max="8"><button type="button" class="btn btn-sm" data-ib="left:0.5" aria-label="เพิ่มการเยื้อง">+</button> ซม.</span>
+          <button type="button" class="btn btn-sm btn-ghost rst" id="ib-reset">คืนค่ามาตรฐาน (2.5 ซม.)</button>
+          <span class="muted small" style="flex-basis:100%">${locked() ? 'คำสั่งล็อกอยู่ แก้ไขบนหน้าไม่ได้' : 'คลิกข้อความบนหน้ากระดาษเพื่อพิมพ์แก้ได้ทันที (ย่อหน้า ชื่อ ตำแหน่ง บทบาท) · กด Tab / Shift+Tab เพื่อเพิ่ม/ลดย่อหน้า'}</span>
+        </div>
         <div class="doc-scroll"><div class="doc-zoom" id="o-pages"></div></div>
       </div></div>`;
   drawForm();
+  bindPageEditing();
   await drawPreview();
   const onResize = () => fit();
   window.addEventListener('resize', onResize);

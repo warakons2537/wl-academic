@@ -404,12 +404,13 @@ table.mx { border-collapse: separate; border-spacing: 0; font-size: .86rem; }
 .editor .form { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
 .editor textarea { min-height: 84px; font-size: .9rem; }
 .committee { border: 1px solid var(--rule); border-radius: var(--r); padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--paper); }
-.committee .mem { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.committee .mem { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; align-items: center; }
 .committee .mem select, .committee .mem input { width: 100%; font-size: .86rem; padding: 5px 7px; }
 @media (max-width: 1080px) { .editor { grid-template-columns: minmax(0, 1fr); } .editor .form { position: static; max-height: none; } }
 @media (max-width: 600px) {   /* แถวกรรมการบนมือถือ: ชื่อ + ปุ่มลบแถวบน, บทบาทแถวล่างเต็มความกว้าง */
   .committee .mem { grid-template-columns: minmax(0, 1fr) auto; }
-  .committee .mem > [data-mf="role"] { grid-column: 1 / -1; grid-row: 2; }
+  .committee .mem > [data-mf="position"] { grid-column: 1 / -1; grid-row: 2; }
+  .committee .mem > [data-mf="role"] { grid-column: 1 / -1; grid-row: 3; }
   .committee .mem > .icon-btn { grid-column: 2; grid-row: 1; }
 }
 
@@ -559,3 +560,20 @@ ul.log a svg.i { width: 14px; height: 14px; vertical-align: -2px; }
   font-size: .84rem; font-weight: 600; text-decoration: none; white-space: nowrap; color: #fff; border: 1px solid rgba(255,255,255,.5); transition: background .15s; }
 .login-back:hover { background: rgba(255,255,255,.14); }
 .login-cover .login-back { margin: 14px 26px 0; }
+
+/* ---------- แก้ไขบนหน้ากระดาษโดยตรง ---------- */
+.doc-page .ed { cursor: text; border-radius: 2px; transition: background .12s; }
+.doc-page .ed:hover { background: color-mix(in srgb, var(--gold, #c9a227) 14%, transparent); }
+.doc-page .ed:focus { outline: 1.5px solid var(--gold, #c9a227); outline-offset: 1px; background: color-mix(in srgb, var(--gold, #c9a227) 10%, transparent); }
+.doc-page .ed:empty::before { content: "…"; color: #aaa; }
+.ibar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 12px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper); font-size: .86rem; position: sticky; top: 0; z-index: 5; }
+.ibar .step { display: inline-flex; align-items: center; gap: 4px; }
+.ibar .step input { width: 4.6em; text-align: center; padding: 4px 6px; }
+.ibar .step button { min-width: 30px; }
+.ibar[data-off="1"] .step, .ibar[data-off="1"] .rst { opacity: .45; pointer-events: none; }
+.mgroup { border: 1px solid var(--rule); border-radius: var(--r); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.mgroup > summary { cursor: pointer; font-weight: 600; }
+.mrow { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, .8fr) auto; gap: 6px; align-items: center; }
+.mrow input { width: 100%; font-size: .86rem; padding: 5px 7px; }
+.mrow.gone { opacity: .6; }
+@media (max-width: 720px) { .mrow { grid-template-columns: minmax(0, 1fr) auto; } .mrow input:not(:first-child) { grid-column: 1 / -1; } }
