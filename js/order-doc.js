@@ -75,6 +75,19 @@ export const FMT_FIELDS = {
 };
 // [ต่ำสุด, สูงสุด, ความละเอียด]
 export const FMT_LIMITS = { first: [-8, 8, 0.05], left: [0, 10, 0.05], right: [-1.5, 8, 0.05], size: [8, 26, 0.5], cs: [-2, 4, 0.05], before: [0, 72, 1] };
+// ความกว้างคอลัมน์รายชื่อ (ซม.): ลำดับ · ชื่อ · ตำแหน่ง — ช่องบทบาทใช้ที่ที่เหลือถึงขอบขวา · ตั้งทั้งฉบับที่ options.memCols
+export const MEM_COLS = [1.2, 4.4, 3.3];
+export const MEM_COL_LIMITS = [[0.6, 3], [2, 9], [1, 8]];
+const MEM_COLS_MAX = 11.5;                                         // รวม 3 ช่องไม่เกินนี้ เหลือช่องบทบาทอย่างน้อย 1 ซม.
+export const memColsOf = (options) => {
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const c = MEM_COLS.map((d, i) => {
+    const v = options?.memCols?.[i]; const n = Number(v); const [lo, hi] = MEM_COL_LIMITS[i];
+    return v === null || v === undefined || v === '' || !Number.isFinite(n) ? d : r2(Math.min(hi, Math.max(lo, Math.round(n / 0.05) * 0.05)));
+  });
+  for (const i of [2, 1]) { const over = c[0] + c[1] + c[2] - MEM_COLS_MAX; if (over > 0) c[i] = r2(Math.max(MEM_COL_LIMITS[i][0], c[i] - over)); }
+  return c;
+};
 export const fmtBase = (type) => ({ ...FMT_COMMON, ...(FMT_BASE[type] || {}) });
 export function cleanFmt(type, f) {
   const out = { ...fmtBase(type) };
@@ -102,7 +115,8 @@ export function buildModel(order, sections, meta) {
   const D = (s) => digits(s, mode);
   const showDuties = order.options?.show_duties !== false;
   const B = [];
-  const push = (b) => { if (b.key) b.f = fmtOf(b.type, b.key, order.options); B.push(b); };
+  const cols = memColsOf(order.options);
+  const push = (b) => { if (b.key) b.f = fmtOf(b.type, b.key, order.options); if (b.type === 'member') b.cols = cols; B.push(b); };
   const nl = (t) => String(t ?? '').replace(/\r/g, '');
   push({ type: 'garuda' });
   push({ type: 'center', key: 'school', text: D(`คำสั่งโรงเรียน${meta.schoolName || '……………'}`) });
@@ -145,6 +159,7 @@ export function fmtStyle(b) {
   s.push(`padding-top:${num(f.before)}pt`, `padding-left:${num(f.left + (b.type === 'duty' ? 1.1 : 0))}cm`);
   if (f.right) s.push(`margin-right:${num(f.right)}cm`);
   if (b.type === 'para') s.push(`text-indent:${num(f.first)}cm`);
+  if (b.type === 'member' && b.cols) s.push(`grid-template-columns:${b.cols.map((c) => `${num(c)}cm`).join(' ')} minmax(0,1fr)`);
   if (b.type === 'para' || b.type === 'center' || b.type === 'duty') s.push(`text-align:${{ c: 'center', r: 'right' }[f.align] || 'left'}`);
   return s.join(';');
 }
