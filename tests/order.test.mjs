@@ -138,4 +138,15 @@ t('จัดรูปแบบทีละบล็อก: ค่ามาตร
   writeFileSync(new URL('./out/order-formatted.docx', import.meta.url), buildDocx(m, null));
 });
 
+t('ความกว้างคอลัมน์รายชื่อ (ทั้งฉบับ)', () => {
+  const m = buildModel({ ...order, options: { ...order.options, memCols: [1, 5.5, 99] } }, resolveAnnual(year, staffById), { schoolName: 'x' });
+  const row = m.blocks.find((b) => b.type === 'member' && !b.empty);
+  assert.deepEqual(row.cols, [1, 5.5, 5], 'รวมแล้วต้องเหลือที่ให้ช่องบทบาท');
+  assert.match(fmtStyle(row), /grid-template-columns:1cm 5\.5cm 5cm minmax\(0,1fr\)/);
+  assert.deepEqual(model.blocks.find((b) => b.type === 'member').cols, [1.2, 4.4, 3.3]);
+  const m2 = buildModel({ ...order, options: { ...order.options, memCols: [1, 5.5, 3] } }, resolveAnnual(year, staffById), { schoolName: 'x' });
+  const xml = new TextDecoder().decode(buildDocx(m2, null));
+  assert.match(xml, /<w:gridCol w:w="567"\/><w:gridCol w:w="3119"\/><w:gridCol w:w="1701"\/><w:gridCol w:w="1701"\/>/);   // 1 · 5.5 · 3 · ที่เหลือ 3 ซม.
+});
+
 console.log(`\nผ่านทั้งหมด ${n} ชุด`);

@@ -112,13 +112,13 @@ function blockXml(b, img) {
 }
 
 // คอลัมน์ของตารางรายชื่อเมื่อเยื้องซ้าย left ซม. — ช่องบทบาทกินที่ที่เหลือถึงขอบขวา (เหมือน 1fr บนจอ)
-const memCols = (left) => [...MEM.cols.slice(0, 3), Math.max(1, Math.round((16 - left - MEM.cols[0] - MEM.cols[1] - MEM.cols[2]) * 100) / 100)];
+const memCols = (left, c = MEM.cols) => [c[0], c[1], c[2], Math.max(1, Math.round((16 - left - c[0] - c[1] - c[2]) * 100) / 100)].filter((w) => w > 0);
 function memberRow(b, f) {
-  const cols = memCols(f.left);
+  const cols = memCols(f.left, b.cols);
   const cell = (w, text) => `<w:tc><w:tcPr><w:tcW w:w="${tw(w)}" w:type="dxa"/></w:tcPr>${para({ f, before: Math.round(f.before * 20) }, run(text, { f }))}</w:tc>`;
-  return `<w:tr><w:trPr><w:cantSplit/></w:trPr>${[b.no, b.name, b.title, b.role].map((t, i) => cell(cols[i], t)).join('')}</w:tr>`;
+  return `<w:tr><w:trPr><w:cantSplit/></w:trPr>${[b.no, b.name, b.title, b.role].filter((_, i) => i !== 2 || (b.cols || MEM.cols)[2] > 0).map((t, i) => cell(cols[i], t)).join('')}</w:tr>`;
 }
-const memberTable = (rows, left = MEM.left) => { const cols = memCols(left);
+const memberTable = (rows, left = MEM.left, c = MEM.cols) => { const cols = memCols(left, c);
   return `<w:tbl><w:tblPr><w:tblW w:w="${tw(cols.reduce((a, c) => a + c, 0))}" w:type="dxa"/><w:tblInd w:w="${tw(left)}" w:type="dxa"/>
 <w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders>
 <w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="57" w:type="dxa"/></w:tblCellMar><w:tblLook w:val="0000"/></w:tblPr>
@@ -126,13 +126,13 @@ const memberTable = (rows, left = MEM.left) => { const cols = memCols(left);
 
 // รวมบรรทัดรายชื่อที่ติดกันและเยื้องเท่ากันเป็นตารางเดียว
 function bodyXml(blocks, img) {
-  const out = []; let rows = []; let left = null;
-  const flushRows = () => { if (rows.length) { out.push(memberTable(rows, left)); rows = []; } };
+  const out = []; let rows = []; let left = null; let cols;
+  const flushRows = () => { if (rows.length) { out.push(memberTable(rows, left, cols)); rows = []; } };
   for (const b of blocks) {
     if (b.type === 'member') {
       const l = b.f?.left ?? MEM.left;
       if (rows.length && l !== left) { flushRows(); out.push('<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>'); }  // คั่นไม่ให้ Word รวมตาราง
-      left = l; rows.push(blockXml(b, img)); continue;
+      left = l; cols = b.cols || MEM.cols; rows.push(blockXml(b, img)); continue;
     }
     flushRows(); out.push(blockXml(b, img));
   }

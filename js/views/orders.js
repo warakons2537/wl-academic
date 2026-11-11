@@ -3,7 +3,7 @@ import { icon } from '../icons.js';
 import { ORDER_DEFAULTS } from '../task-sets.js';
 import { loadYear, membersOf, taskWarnings } from '../data.js';
 import { staffName, fillTemplate, digits } from '../thai.js';
-import { shortTitle, buildModel, resolveAnnual, resolveSpecial, renderPages, fmtOf, fmtBase, cleanFmt, FMT_FIELDS, FMT_LIMITS } from '../order-doc.js';
+import { shortTitle, buildModel, resolveAnnual, resolveSpecial, renderPages, fmtOf, fmtBase, cleanFmt, FMT_FIELDS, FMT_LIMITS, memColsOf, MEM_COLS, MEM_COL_LIMITS } from '../order-doc.js';
 import { buildDocx, imageFromDataUrl, downloadBytes } from '../docx.js';
 
 const idFromHash = () => new URLSearchParams(location.hash.split('?')[1] || '').get('id');
@@ -378,14 +378,17 @@ async function editor(el, ctx, id) {
     if (on) node.classList.add('sel');
     bar.dataset.off = on ? '0' : '1';
     $('#ib-name', el).textContent = sel ? (KEY_NAME[sel.key] || TYPE_NAME[sel.type]) : 'คลิกบรรทัดบนหน้ากระดาษเพื่อเลือก';
-    const fields = sel ? FMT_FIELDS[sel.type] : STEPS.map((x) => x[0]).concat('align', 'pb');
+    const fields = sel ? FMT_FIELDS[sel.type].concat(sel.type === 'member' ? 'cols' : []) : STEPS.map((x) => x[0]).concat('align', 'pb');
     const f = sel ? curFmt() : null;
     $$('[data-fld]', bar).forEach((n) => { n.hidden = !fields.includes(n.dataset.fld); });
     $$('input[data-val]', bar).forEach((inp) => { if (document.activeElement !== inp) inp.value = f ? f[inp.dataset.val] : ''; });
+    const mc = memColsOf(o.options);
+    $$('input[data-colv]', bar).forEach((inp) => { if (document.activeElement !== inp) inp.value = mc[Number(inp.dataset.colv)]; });
+    $('#ib-colrst', bar).hidden = !o.options?.memCols;
     $$('[data-al]', bar).forEach((b) => b.classList.toggle('on', !!f && f.align === b.dataset.al));
     $('#ib-pb', bar).checked = !!f?.pb;
     $('#ib-all', bar).textContent = sel ? `ใช้กับทุก${TYPE_NAME[sel.type]}` : 'ใช้กับทุกบรรทัดชนิดเดียวกัน';
-    const custom = !!(o.options?.fmt && Object.keys(o.options.fmt).length) || !!(o.options?.fmtAll && Object.keys(o.options.fmtAll).length) || !!(o.options?.para && Object.keys(o.options.para).length);
+    const custom = !!(o.options?.fmt && Object.keys(o.options.fmt).length) || !!(o.options?.fmtAll && Object.keys(o.options.fmtAll).length) || !!(o.options?.para && Object.keys(o.options.para).length) || !!o.options?.memCols;
     $('#ib-clear', bar).hidden = !custom || locked();
   }
   const without = (obj, key) => { const c = { ...(obj || {}) }; delete c[key]; return c; };
@@ -398,6 +401,15 @@ async function editor(el, ctx, id) {
     const fmt = without(o.options?.fmt, sel.key); if (Object.keys(d).length) fmt[sel.key] = d;
     o.options = { ...o.options, fmt, para: without(o.options?.para, sel.key) };
     commitFmt();
+  }
+  function setCols(i, v) {                                         // ความกว้างคอลัมน์รายชื่อ ใช้ทั้งฉบับ (ทุกงานตรงแนวเดียวกัน)
+    if (locked()) return;
+    const cur = memColsOf(o.options);
+    if (i !== null) cur[i] = v;
+    const next = i === null ? null : memColsOf({ memCols: cur });
+    const opt = { ...o.options }; delete opt.memCols;
+    if (next && next.some((c, k) => c !== MEM_COLS[k])) opt.memCols = next;
+    o.options = opt; commitFmt();
   }
   const nudge = (fld, d) => setFmt({ [fld]: curFmt()[fld] + d });
   function applyAll() {                                            // ใช้รูปแบบของบล็อกนี้กับทุกบล็อกชนิดเดียวกัน (ยกเว้นการขึ้นหน้าใหม่)
@@ -418,7 +430,7 @@ async function editor(el, ctx, id) {
   }
   async function clearAllFmt() {
     if (locked() || !(await confirmBox('ล้างการจัดรูปแบบทั้งหมดของคำสั่งฉบับนี้ กลับเป็นรูปแบบมาตรฐานตามระเบียบ? (ข้อความไม่เปลี่ยน)', 'ล้างรูปแบบ'))) return;
-    o.options = { ...o.options, fmt: {}, fmtAll: {}, para: {} };
+    o.options = { ...o.options, fmt: {}, fmtAll: {}, para: {} }; delete o.options.memCols;
     commitFmt();
   }
   // ข้อความในช่องที่แก้บนหน้า: \n = ขึ้นบรรทัดใหม่ (Shift+Enter), \t = แท็บ
@@ -473,6 +485,9 @@ async function editor(el, ctx, id) {
     bar.addEventListener('mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); });   // กดปุ่มแล้วเคอร์เซอร์บนหน้าไม่หลุด
     $$('[data-ib]', bar).forEach((b) => b.addEventListener('click', () => { if (!sel) return; const [fld, d] = b.dataset.ib.split(':'); nudge(fld, Number(d)); }));
     $$('input[data-val]', bar).forEach((inp) => inp.addEventListener('change', () => setFmt({ [inp.dataset.val]: inp.value })));
+    $$('[data-col]', bar).forEach((b) => b.addEventListener('click', () => { const [i, d] = b.dataset.col.split(':').map(Number); setCols(i, memColsOf(o.options)[i] + d); }));
+    $$('input[data-colv]', bar).forEach((inp) => inp.addEventListener('change', () => setCols(Number(inp.dataset.colv), inp.value)));
+    $('#ib-colrst', bar).addEventListener('click', () => setCols(null));
     $$('[data-al]', bar).forEach((b) => b.addEventListener('click', () => setFmt({ align: b.dataset.al })));
     $('#ib-pb', bar).addEventListener('change', (e) => setFmt({ pb: e.target.checked }));
     $('#ib-br', bar).addEventListener('click', () => insertAtCaret('\n'));
@@ -494,6 +509,12 @@ async function editor(el, ctx, id) {
             <button type="button" class="btn btn-sm btn-ghost" id="ib-clear" hidden>ล้างรูปแบบทั้งฉบับ</button></div>
           <div class="ibar-row need">
             ${STEPS.map(([k, label, unit, d]) => `<span class="step" data-fld="${k}">${label} <button type="button" class="btn btn-sm" data-ib="${k}:${-d}" aria-label="ลด${label}">−</button><input type="number" data-val="${k}" step="${FMT_LIMITS[k][2]}" min="${FMT_LIMITS[k][0]}" max="${FMT_LIMITS[k][1]}" aria-label="${label} (${unit})"><button type="button" class="btn btn-sm" data-ib="${k}:${d}" aria-label="เพิ่ม${label}">+</button> ${unit}</span>`).join('')}
+          </div>
+          <div class="ibar-row need" data-fld="cols">
+            <b class="small">ความกว้างคอลัมน์รายชื่อ (ทั้งฉบับ)</b>
+            ${['ลำดับ', 'ชื่อ', 'ตำแหน่ง'].map((label, i) => `<span class="step">${label} <button type="button" class="btn btn-sm" data-col="${i}:-0.25" aria-label="ลดความกว้างช่อง${label}">−</button><input type="number" data-colv="${i}" step="0.05" min="${MEM_COL_LIMITS[i][0]}" max="${MEM_COL_LIMITS[i][1]}" aria-label="ความกว้างช่อง${label} (ซม.)"><button type="button" class="btn btn-sm" data-col="${i}:0.25" aria-label="เพิ่มความกว้างช่อง${label}">+</button> ซม.</span>`).join('')}
+            <span class="muted small">ช่องบทบาทใช้ที่ที่เหลือ</span>
+            <button type="button" class="btn btn-sm btn-ghost" id="ib-colrst" hidden>คืนค่าคอลัมน์</button>
           </div>
           <div class="ibar-row need">
             <span class="step" data-fld="align">จัดแนว <span class="seg">${[['l', 'ซ้าย'], ['c', 'กลาง'], ['r', 'ขวา'], ['d', 'กระจายแบบไทย']].map(([k, t]) => `<button type="button" data-al="${k}">${t}</button>`).join('')}</span></span>
