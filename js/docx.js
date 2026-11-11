@@ -54,12 +54,20 @@ export const FONT = 'TH SarabunPSK';
 // ใช้ตารางแทนแท็บ ชื่อยาวจะขึ้นบรรทัดใหม่ในช่องของตัวเอง ไม่ดันคอลัมน์ถัดไปให้เพี้ยน
 const MEM = { left: 3.5, cols: [1.2, 4.4, 3.3, 3.6] };
 
-const run = (text, { b = false } = {}) => (text === '' ? '' :
-  `<w:r>${b ? '<w:rPr><w:b/><w:bCs/></w:rPr>' : ''}<w:t xml:space="preserve">${xmlEsc(text)}</w:t></w:r>`);
+// ข้อความ → <w:t> โดย \n = ขึ้นบรรทัดใหม่ในย่อหน้าเดิม (Shift+Enter) และ \t = แท็บ
+const runText = (text) => String(text).replace(/\r/g, '').split(/([\n\t])/).map((x) => (x === '\n' ? '<w:br/>' : x === '\t' ? '<w:tab/>'
+  : x === '' ? '' : `<w:t xml:space="preserve">${xmlEsc(x)}</w:t>`)).join('');
+// f = รูปแบบของบล็อก (size พอยต์, cs ระยะอักษร พอยต์)
+const rFmt = (f) => `${f?.cs ? `<w:spacing w:val="${Math.round(f.cs * 20)}"/>` : ''}${f && f.size && f.size !== 16 ? `<w:sz w:val="${Math.round(f.size * 2)}"/><w:szCs w:val="${Math.round(f.size * 2)}"/>` : ''}`;
+const run = (text, { b = false, f } = {}) => {
+  if (text === '' || text === undefined || text === null) return '';
+  const rPr = `${b ? '<w:b/><w:bCs/>' : ''}${rFmt(f)}`;
+  return `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}${runText(text)}</w:r>`;
+};
 const tab = '<w:r><w:tab/></w:r>';
-const pPr = ({ jc, ind, before = 0, keep = false, tabs = [], border = false } = {}) => `<w:pPr>${keep ? '<w:keepNext/><w:keepLines/>' : ''}${border
+const pPr = ({ jc, ind, before = 0, keep = false, pb = false, tabs = [], border = false, f } = {}) => `<w:pPr>${keep ? '<w:keepNext/><w:keepLines/>' : ''}${pb ? '<w:pageBreakBefore/>' : ''}${border
   ? '<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="000000"/></w:pBdr>' : ''}${tabs.length
-  ? `<w:tabs>${tabs.map((t) => `<w:tab w:val="left" w:pos="${t}"/>`).join('')}</w:tabs>` : ''}<w:spacing w:before="${before}" w:after="0" w:line="240" w:lineRule="auto"/>${ind ? `<w:ind ${ind}/>` : ''}${jc ? `<w:jc w:val="${jc}"/>` : ''}</w:pPr>`;
+  ? `<w:tabs>${tabs.map((t) => `<w:tab w:val="left" w:pos="${t}"/>`).join('')}</w:tabs>` : ''}<w:spacing w:before="${before}" w:after="0" w:line="240" w:lineRule="auto"/>${ind ? `<w:ind ${ind}/>` : ''}${jc ? `<w:jc w:val="${jc}"/>` : ''}${rFmt(f) ? `<w:rPr>${rFmt(f)}</w:rPr>` : ''}</w:pPr>`;
 const para = (opts, inner) => `<w:p>${pPr(opts)}${inner}</w:p>`;
 
 function imageXml(img) {
@@ -73,24 +81,25 @@ function imageXml(img) {
 </a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
 }
 
-// เยื้องย่อหน้า: first < 0 = ย่อหน้าแขวน (hanging)
-const paraInd = (b) => {
-  const first = b.first ?? 2.5; const left = b.left ?? 0;
-  return `${left ? `w:left="${tw(left)}" ` : ''}${first < 0 ? `w:hanging="${tw(-first)}"` : `w:firstLine="${tw(first)}"`}`;
-};
+// เยื้อง (ซม.) → แอตทริบิวต์ของ <w:ind> · first < 0 = ย่อหน้าแขวน (hanging)
+const ind = ({ left = 0, right = 0, first = 0 }) => [left ? `w:left="${tw(left)}"` : '', right ? `w:right="${tw(right)}"` : '',
+  first < 0 ? `w:hanging="${tw(-first)}"` : first > 0 ? `w:firstLine="${tw(first)}"` : ''].filter(Boolean).join(' ');
+const JC = { l: 'left', c: 'center', r: 'right', d: 'thaiDistribute' };
+const F0 = { first: 0, left: 0, right: 0, size: 16, cs: 0, before: 0, align: 'l', pb: false };
 
 // แปลงบล็อกเป็นย่อหน้า Word
 function blockXml(b, img) {
-  const SP = 120; // ระยะก่อนย่อหน้า 6 พอยต์
+  const f = { ...F0, ...(b.f || {}) };
+  const o = { f, before: Math.round(f.before * 20), pb: f.pb };       // ใช้ร่วมทุกบล็อกที่ปรับรูปแบบได้
   switch (b.type) {
     case 'garuda': return img ? para({ jc: 'center', keep: true }, imageXml(img)) : '';
-    case 'center': return para({ jc: 'center', keep: true }, run(b.text));
+    case 'center': return para({ ...o, pb: false, jc: JC[f.align], keep: true, ind: ind(f) }, run(b.text, { f }));
     case 'rule': return para({ jc: 'center', keep: true, border: true, ind: `w:left="${tw(5.25)}" w:right="${tw(5.25)}"` }, '') + para({ keep: true }, '');
-    case 'para': return para({ jc: 'thaiDistribute', ind: paraInd(b), before: b.space ? SP : 0, keep: b.keep }, run(b.text));
-    case 'heading': return para({ keep: true, before: SP, ind: `w:left="${tw(3.5)}" w:hanging="${tw(1)}"`, tabs: [tw(3.5)] }, run(b.no, { b: true }) + tab + run(b.text, { b: true }));
-    case 'member': return memberRow(b);
-    case 'dutyLabel': return para({ keep: true, ind: `w:left="${tw(3.5)}"` }, run(b.text));
-    case 'duty': return para({ jc: 'thaiDistribute', ind: `w:left="${tw(4.6)}" w:hanging="${tw(1.1)}"`, tabs: [tw(4.6)] }, run(b.no) + tab + run(b.text));
+    case 'para': return para({ ...o, jc: JC[f.align], ind: ind(f), keep: b.keep }, run(b.text, { f }));
+    case 'heading': return para({ ...o, keep: true, ind: ind({ left: f.left + 1, right: f.right, first: -1 }), tabs: [tw(f.left + 1)] }, run(b.no, { b: true, f }) + tab + run(b.text, { b: true, f }));
+    case 'member': return memberRow(b, f);
+    case 'dutyLabel': return para({ ...o, keep: true, ind: ind({ left: f.left }) }, run(b.text, { f }));
+    case 'duty': return para({ ...o, jc: JC[f.align], ind: ind({ left: f.left + 1.1, right: f.right, first: -1.1 }), tabs: [tw(f.left + 1.1)] }, run(b.no, { f }) + tab + run(b.text, { f }));
     case 'sign': {
       const who = `w:left="${tw(5.5)}" w:right="${tw(1.5)}"`;
       return para({ keep: true, before: 240, ind: `w:left="${tw(6.5)}"` }, run(b.when))
@@ -102,21 +111,29 @@ function blockXml(b, img) {
   }
 }
 
-function memberRow(b) {
-  const cell = (w, text) => `<w:tc><w:tcPr><w:tcW w:w="${tw(w)}" w:type="dxa"/></w:tcPr>${para({}, run(text))}</w:tc>`;
-  return `<w:tr><w:trPr><w:cantSplit/></w:trPr>${[b.no, b.name, b.title, b.role].map((t, i) => cell(MEM.cols[i], t)).join('')}</w:tr>`;
+// คอลัมน์ของตารางรายชื่อเมื่อเยื้องซ้าย left ซม. — ช่องบทบาทกินที่ที่เหลือถึงขอบขวา (เหมือน 1fr บนจอ)
+const memCols = (left) => [...MEM.cols.slice(0, 3), Math.max(1, Math.round((16 - left - MEM.cols[0] - MEM.cols[1] - MEM.cols[2]) * 100) / 100)];
+function memberRow(b, f) {
+  const cols = memCols(f.left);
+  const cell = (w, text) => `<w:tc><w:tcPr><w:tcW w:w="${tw(w)}" w:type="dxa"/></w:tcPr>${para({ f, before: Math.round(f.before * 20) }, run(text, { f }))}</w:tc>`;
+  return `<w:tr><w:trPr><w:cantSplit/></w:trPr>${[b.no, b.name, b.title, b.role].map((t, i) => cell(cols[i], t)).join('')}</w:tr>`;
 }
-const memberTable = (rows) => `<w:tbl><w:tblPr><w:tblW w:w="${tw(MEM.cols.reduce((a, c) => a + c, 0))}" w:type="dxa"/><w:tblInd w:w="${tw(MEM.left)}" w:type="dxa"/>
+const memberTable = (rows, left = MEM.left) => { const cols = memCols(left);
+  return `<w:tbl><w:tblPr><w:tblW w:w="${tw(cols.reduce((a, c) => a + c, 0))}" w:type="dxa"/><w:tblInd w:w="${tw(left)}" w:type="dxa"/>
 <w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders>
 <w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="57" w:type="dxa"/></w:tblCellMar><w:tblLook w:val="0000"/></w:tblPr>
-<w:tblGrid>${MEM.cols.map((c) => `<w:gridCol w:w="${tw(c)}"/>`).join('')}</w:tblGrid>${rows.join('')}</w:tbl>`;
+<w:tblGrid>${cols.map((c) => `<w:gridCol w:w="${tw(c)}"/>`).join('')}</w:tblGrid>${rows.join('')}</w:tbl>`; };
 
-// รวมบรรทัดรายชื่อที่ติดกันเป็นตารางเดียว
+// รวมบรรทัดรายชื่อที่ติดกันและเยื้องเท่ากันเป็นตารางเดียว
 function bodyXml(blocks, img) {
-  const out = []; let rows = [];
-  const flushRows = () => { if (rows.length) { out.push(memberTable(rows)); rows = []; } };
+  const out = []; let rows = []; let left = null;
+  const flushRows = () => { if (rows.length) { out.push(memberTable(rows, left)); rows = []; } };
   for (const b of blocks) {
-    if (b.type === 'member') { rows.push(blockXml(b, img)); continue; }
+    if (b.type === 'member') {
+      const l = b.f?.left ?? MEM.left;
+      if (rows.length && l !== left) { flushRows(); out.push('<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>'); }  // คั่นไม่ให้ Word รวมตาราง
+      left = l; rows.push(blockXml(b, img)); continue;
+    }
     flushRows(); out.push(blockXml(b, img));
   }
   flushRows();
@@ -152,7 +169,7 @@ ${sect}</w:body></w:document>`;
 <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr>${rPrDefault}</w:rPr></w:style>
 </w:styles>`;
   const settings = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:defaultTabStop w:val="${tw(1)}"/><w:characterSpacingControl w:val="doNotCompress"/><w:themeFontLang w:val="en-US" w:bidi="th-TH"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:defaultTabStop w:val="${tw(1)}"/><w:characterSpacingControl w:val="doNotCompress"/><w:themeFontLang w:val="en-US" w:bidi="th-TH"/><w:compat><w:doNotExpandShiftReturn/><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
   const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
   const core = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xmlEsc(title)}</dc:title><dc:creator>WL Academic</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created></cp:coreProperties>`;

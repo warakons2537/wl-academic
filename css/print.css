@@ -16,6 +16,7 @@
   .doc-page { box-shadow: none; margin: 0; break-after: page; }
   .doc-page .ed, .doc-page .ed:hover, .doc-page .ed:focus { outline: none !important; background: none !important; }
   .doc-page .ed:empty::before { content: none; }
+  .doc-page .b.sel { outline: none !important; }
   .ibar { display: none !important; }
   .doc-page:last-child { break-after: auto; }
   .a4 { box-shadow: none; margin: 0; break-after: page; min-height: 0 !important; }

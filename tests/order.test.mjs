@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { toThaiDigits, toArabicDigits, orderDate, staffTitle, splitName, guessAcademicYear } from '../js/thai.js';
-import { buildModel, resolveAnnual, resolveSpecial, paginate, CONTENT_H, splitLines } from '../js/order-doc.js';
+import { buildModel, resolveAnnual, resolveSpecial, paginate, CONTENT_H, splitLines, fmtOf, cleanFmt, fmtStyle, blockHtml } from '../js/order-doc.js';
 import { buildDocx } from '../js/docx.js';
 import { seedDemo } from '../js/demo-data.js';
 import { workloadSummary, taskWarnings, membersOf } from '../js/data.js';
@@ -102,6 +102,40 @@ t('ไฟล์ .docx', () => {
   writeFileSync(new URL('./out/order-annual.docx', import.meta.url), bytes);
   const sp = buildModel(demo.ac_orders[1], resolveSpecial(demo.ac_orders[1], staffById), { schoolName: 'บ้านวังลึก (ยุวนาฏชนูทิศ)' });
   writeFileSync(new URL('./out/order-special.docx', import.meta.url), buildDocx(sp, null));
+});
+
+t('จัดรูปแบบทีละบล็อก: ค่ามาตรฐาน / ทั้งชนิด / เฉพาะบล็อก / ย่อหน้าแบบเดิม', () => {
+  assert.deepEqual(fmtOf('para', 'reason', {}), { first: 2.5, left: 0, right: 0, size: 16, cs: 0, before: 6, align: 'd', pb: false });
+  assert.equal(fmtOf('para', 'legal', { para: { legal: { first: 3, left: 1 } } }).first, 3, 'ค่าย่อหน้าที่บันทึกแบบเดิมยังใช้ได้');
+  const opt = { fmtAll: { duty: { size: 15 } }, fmt: { 'd:tk-01:0': { cs: -0.3, pb: true } } };
+  assert.equal(fmtOf('duty', 'd:tk-01:1', opt).size, 15);
+  assert.deepEqual([fmtOf('duty', 'd:tk-01:0', opt).size, fmtOf('duty', 'd:tk-01:0', opt).cs], [15, -0.3]);
+  assert.equal(cleanFmt('para', { left: 1, first: -5 }).first, -1, 'ย่อหน้าแขวนไม่เลยขอบซ้าย');
+  assert.equal(cleanFmt('member', { size: 99, align: 'c', pb: true }).size, 26);
+  assert.equal(cleanFmt('member', { align: 'c', pb: true }).pb, false, 'รายชื่อไม่มีขึ้นหน้าใหม่/จัดแนว');
+
+  const m = buildModel({ ...order, title: 'บรรทัดหนึ่ง\nบรรทัดสอง', options: { ...order.options, ...opt, fmt: { ...opt.fmt, title: { size: 15.5, cs: -0.2 }, 'm:tk-01:x': { left: 3 } } } },
+    resolveAnnual(year, staffById), { schoolName: 'x' });
+  const title = m.blocks.find((b) => b.key === 'title');
+  assert.match(fmtStyle(title), /font-size:calc\(var\(--doc-size\)\*0\.969\)/);
+  assert.match(fmtStyle(title), /letter-spacing/);
+  assert.match(blockHtml(title, { editable: true }), /data-pkey="title"/);
+  assert.doesNotMatch(blockHtml(title, { editable: false }), /contenteditable/);
+  assert.equal(new Set(m.blocks.filter((b) => b.key).map((b) => b.key)).size, m.blocks.filter((b) => b.key).length, 'รหัสบล็อกต้องไม่ซ้ำ');
+  const d0 = m.blocks.findIndex((b) => b.key === 'd:tk-01:0');
+  assert.ok(d0 > 0 && m.blocks[d0].f.pb);
+  assert.match(fmtStyle(m.blocks[d0]), /padding-left:4\.6cm/);
+
+  const pages = paginate(m.blocks.map(() => 20), m.blocks.map(() => false), m.blocks.map((b) => !!b.f?.pb));
+  assert.equal(pages[1][0], d0, 'บล็อกที่สั่งขึ้นหน้าใหม่ต้องเป็นบรรทัดแรกของหน้า');
+
+  const xml = new TextDecoder().decode(buildDocx(m, null));
+  assert.match(xml, /<w:pageBreakBefore\/>/);
+  assert.match(xml, /บรรทัดหนึ่ง<\/w:t><w:br\/><w:t xml:space="preserve">บรรทัดสอง/);
+  assert.match(xml, /<w:spacing w:val="-4"\/><w:sz w:val="31"\/>/);
+  assert.match(xml, /<w:spacing w:val="-6"\/><w:sz w:val="30"\/>/);
+  assert.match(xml, /doNotExpandShiftReturn/);
+  writeFileSync(new URL('./out/order-formatted.docx', import.meta.url), buildDocx(m, null));
 });
 
 console.log(`\nผ่านทั้งหมด ${n} ชุด`);
