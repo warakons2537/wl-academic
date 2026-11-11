@@ -3,7 +3,7 @@ import { icon } from '../icons.js';
 import { ORDER_DEFAULTS } from '../task-sets.js';
 import { loadYear, membersOf, taskWarnings } from '../data.js';
 import { staffName, fillTemplate, digits } from '../thai.js';
-import { shortTitle, buildModel, resolveAnnual, resolveSpecial, renderPages, INDENT_DEFAULT, clampIndent } from '../order-doc.js';
+import { shortTitle, buildModel, resolveAnnual, resolveSpecial, renderPages, fmtOf, fmtBase, cleanFmt, FMT_FIELDS, FMT_LIMITS } from '../order-doc.js';
 import { buildDocx, imageFromDataUrl, downloadBytes } from '../docx.js';
 
 const idFromHash = () => new URLSearchParams(location.hash.split('?')[1] || '').get('id');
@@ -281,12 +281,36 @@ async function editor(el, ctx, id) {
   // ---------- ตัวอย่าง ----------
   let pt = null;
   const schedulePreview = (ms = 250) => { clearTimeout(pt); pt = setTimeout(drawPreview, ms); };
+  let drawSeq = 0;
   async function drawPreview() {
     const zoom = $('#o-pages', el); if (!zoom) return;
-    const info = await renderPages(zoom, model(), { garuda, editable: !locked() });
+    const my = ++drawSeq;
+    const caret = caretState(zoom);                               // กำลังพิมพ์อยู่บนหน้า → จำตำแหน่งเคอร์เซอร์ไว้คืนหลังวาดใหม่
+    const info = await renderPages(zoom, model(), { garuda, editable: !locked(), stale: () => my !== drawSeq });
+    if (!info) return;
+    restoreCaret(zoom, caret);
     refreshBar();
     $('#o-pinfo', el).innerHTML = `${digits(info.pages, 'arabic')} หน้า${info.fallback ? ' · เครื่องนี้ไม่มีฟอนต์ TH SarabunPSK ตัวอย่างใช้ Sarabun ขนาดเทียบเท่า (ตำแหน่งบรรทัดอาจต่างเล็กน้อย) ไฟล์ Word ใช้ TH SarabunPSK' : ''}${garuda ? '' : ' · <a href="#basics?tab=garuda">ยังไม่มีตราครุฑ</a>'}`;
     fit();
+  }
+  const edId = (n) => (n.dataset.pkey ? `p:${n.dataset.pkey}` : `e:${n.dataset.ed}`);
+  function caretState(zoom) {
+    const a = document.activeElement;
+    if (!a || !zoom.contains(a) || !a.isContentEditable) return null;
+    let at = null;
+    const sl = getSelection();
+    if (sl.rangeCount && a.contains(sl.focusNode)) {
+      const r = document.createRange(); r.selectNodeContents(a); r.setEnd(sl.focusNode, sl.focusOffset);
+      at = r.toString().length + r.cloneContents().querySelectorAll('br').length;
+    }
+    return { id: edId(a), at };
+  }
+  function restoreCaret(zoom, st) {
+    if (!st) return;
+    const n = $$('[contenteditable]', zoom).find((x) => edId(x) === st.id); if (!n) return;
+    n.focus({ preventScroll: true });
+    const tn = n.firstChild;
+    if (st.at !== null && tn?.nodeType === 3) getSelection().collapse(tn, Math.min(st.at, tn.length));
   }
   function fit() {
     const sc = $('.doc-scroll', el); const z = $('#o-pages', el); if (!sc || !z) return;
@@ -332,52 +356,113 @@ async function editor(el, ctx, id) {
     await ctx.db.remove('ac_orders', { id: o.id }); location.hash = 'orders';
   }
 
-  // ---------- แก้ไขบนหน้ากระดาษ + ย่อหน้า ----------
-  let selKey = null;
-  const paraOf = (k) => ({ ...INDENT_DEFAULT, ...(o.options?.para?.[k] || {}) });
-  const PARA_NAME = { reason: 'ย่อหน้าเหตุผล', legal: 'ย่อหน้าข้อกฎหมาย', closing: 'ย่อหน้าปิดท้าย', effective_text: 'ทั้งนี้ ตั้งแต่…' };
+  // ---------- แก้ไขบนหน้ากระดาษ + จัดรูปแบบทีละบล็อก ----------
+  // sel = บล็อกที่เลือกอยู่ { key, type } · รูปแบบเก็บใน options.fmt[key] (เฉพาะบล็อก) และ options.fmtAll[type] (ทั้งชนิด)
+  let sel = null;
+  const KEY_NAME = { school: 'บรรทัด "คำสั่งโรงเรียน…"', number: 'เลขที่คำสั่ง', title: 'เรื่อง', reason: 'ย่อหน้าเหตุผล', legal: 'ย่อหน้าข้อกฎหมาย', closing: 'ย่อหน้าปิดท้าย', effective_text: 'ทั้งนี้ ตั้งแต่…' };
+  const TYPE_NAME = { center: 'บรรทัดหัวคำสั่ง', para: 'ย่อหน้า', heading: 'หัวข้องาน/คณะ', member: 'บรรทัดรายชื่อ', dutyLabel: 'บรรทัด "มีหน้าที่"', duty: 'ข้อหน้าที่' };
+  const STEPS = [['first', 'บรรทัดแรก', 'ซม.', 0.5], ['left', 'เยื้องซ้าย', 'ซม.', 0.25], ['right', 'เยื้องขวา', 'ซม.', 0.25],
+    ['size', 'ขนาดอักษร', 'พ.', 0.5], ['cs', 'ระยะอักษร', 'พ.', 0.1], ['before', 'เว้นก่อนบรรทัด', 'พ.', 6]];
+  const curFmt = () => fmtOf(sel.type, sel.key, o.options);
+  const blockEl = (key) => $$('[data-bk]', $('#o-pages', el)).find((x) => x.dataset.bk === key);
+  function select(node) {
+    const b = node?.closest?.('[data-bk]'); if (!b) return;
+    sel = { key: b.dataset.bk, type: b.dataset.bt }; refreshBar();
+  }
   function refreshBar() {
     const bar = $('#o-ibar', el); if (!bar) return;
-    const on = !!selKey && !locked();
+    $$('.b.sel', $('#o-pages', el)).forEach((x) => x.classList.remove('sel'));
+    const node = sel && blockEl(sel.key);
+    if (sel && !node) sel = null;                                  // บล็อกหายไปแล้ว (เช่น ลบย่อหน้า/นำคนออก)
+    const on = !!sel && !locked();
+    if (on) node.classList.add('sel');
     bar.dataset.off = on ? '0' : '1';
-    $('#ib-name', el).textContent = selKey ? PARA_NAME[selKey] : 'คลิกย่อหน้าบนหน้ากระดาษเพื่อเลือก';
-    if (selKey) { const p = paraOf(selKey); $('#ib-first', el).value = p.first; $('#ib-left', el).value = p.left; }
+    $('#ib-name', el).textContent = sel ? (KEY_NAME[sel.key] || TYPE_NAME[sel.type]) : 'คลิกบรรทัดบนหน้ากระดาษเพื่อเลือก';
+    const fields = sel ? FMT_FIELDS[sel.type] : STEPS.map((x) => x[0]).concat('align', 'pb');
+    const f = sel ? curFmt() : null;
+    $$('[data-fld]', bar).forEach((n) => { n.hidden = !fields.includes(n.dataset.fld); });
+    $$('input[data-val]', bar).forEach((inp) => { if (document.activeElement !== inp) inp.value = f ? f[inp.dataset.val] : ''; });
+    $$('[data-al]', bar).forEach((b) => b.classList.toggle('on', !!f && f.align === b.dataset.al));
+    $('#ib-pb', bar).checked = !!f?.pb;
+    $('#ib-all', bar).textContent = sel ? `ใช้กับทุก${TYPE_NAME[sel.type]}` : 'ใช้กับทุกบรรทัดชนิดเดียวกัน';
+    const custom = !!(o.options?.fmt && Object.keys(o.options.fmt).length) || !!(o.options?.fmtAll && Object.keys(o.options.fmtAll).length) || !!(o.options?.para && Object.keys(o.options.para).length);
+    $('#ib-clear', bar).hidden = !custom || locked();
   }
-  function setIndent(patch) {
-    if (!selKey || locked()) return;
-    const cur = paraOf(selKey);
-    const left = clampIndent(patch.left ?? cur.left);
-    const first = clampIndent(patch.first ?? cur.first, -left, 8);
-    o.options = { ...o.options, para: { ...(o.options?.para || {}), [selKey]: { first, left } } };
-    const pe = $(`[data-pkey="${selKey}"]`, $('#o-pages', el));     // ปรับทันทีบนหน้า แล้วค่อยแบ่งหน้าใหม่
-    if (pe) { pe.style.textIndent = `${first}cm`; pe.style.paddingLeft = `${left}cm`; }
-    refreshBar(); queueSave();
+  const without = (obj, key) => { const c = { ...(obj || {}) }; delete c[key]; return c; };
+  const diffFmt = (f, base, keys) => Object.fromEntries(keys.filter((k) => f[k] !== base[k]).map((k) => [k, f[k]]));
+  function commitFmt() { queueSave(false, false); drawPreview(); }
+  function setFmt(patch) {
+    if (!sel || locked()) return;
+    const next = cleanFmt(sel.type, { ...curFmt(), ...patch });
+    const d = diffFmt(next, fmtOf(sel.type, null, o.options), FMT_FIELDS[sel.type]);   // เก็บเฉพาะส่วนที่ต่างจากค่าของทั้งชนิด
+    const fmt = without(o.options?.fmt, sel.key); if (Object.keys(d).length) fmt[sel.key] = d;
+    o.options = { ...o.options, fmt, para: without(o.options?.para, sel.key) };
+    commitFmt();
+  }
+  const nudge = (fld, d) => setFmt({ [fld]: curFmt()[fld] + d });
+  function applyAll() {                                            // ใช้รูปแบบของบล็อกนี้กับทุกบล็อกชนิดเดียวกัน (ยกเว้นการขึ้นหน้าใหม่)
+    if (!sel || locked()) return;
+    const keys = FMT_FIELDS[sel.type].filter((k) => k !== 'pb');
+    const d = diffFmt(curFmt(), fmtBase(sel.type), keys);
+    const fmtAll = without(o.options?.fmtAll, sel.type); if (Object.keys(d).length) fmtAll[sel.type] = d;
+    const fmt = { ...(o.options?.fmt || {}) }; const para = { ...(o.options?.para || {}) };
+    const same = model().blocks.filter((b) => b.type === sel.type && b.key);
+    for (const b of same) { if (fmt[b.key]?.pb) fmt[b.key] = { pb: true }; else delete fmt[b.key]; delete para[b.key]; }
+    o.options = { ...o.options, fmt, fmtAll, para };
+    commitFmt(); toast(`ใช้กับ${TYPE_NAME[sel.type]}ทั้ง ${same.length} รายการแล้ว`);
+  }
+  function resetBlock() {
+    if (!sel || locked()) return;
+    o.options = { ...o.options, fmt: without(o.options?.fmt, sel.key), para: without(o.options?.para, sel.key) };
+    commitFmt();
+  }
+  async function clearAllFmt() {
+    if (locked() || !(await confirmBox('ล้างการจัดรูปแบบทั้งหมดของคำสั่งฉบับนี้ กลับเป็นรูปแบบมาตรฐานตามระเบียบ? (ข้อความไม่เปลี่ยน)', 'ล้างรูปแบบ'))) return;
+    o.options = { ...o.options, fmt: {}, fmtAll: {}, para: {} };
+    commitFmt();
+  }
+  // ข้อความในช่องที่แก้บนหน้า: \n = ขึ้นบรรทัดใหม่ (Shift+Enter), \t = แท็บ
+  const pageText = (t) => t.innerText.replace(/\r/g, '').replace(/ /g, ' ').replace(/\n+$/, '');
+  const canBreak = (t) => !!t?.isContentEditable && !!t.dataset.pkey && t.dataset.pkey !== 'number';
+  function insertAtCaret(ch) {
+    const t = document.activeElement;
+    if (!canBreak(t) || locked()) { toast('คลิกวางเคอร์เซอร์ในเรื่องหรือย่อหน้าบนหน้ากระดาษก่อน'); return; }
+    if (ch === '\n') document.execCommand('insertLineBreak'); else document.execCommand('insertText', false, ch);
   }
   function bindPageEditing() {
     const pages = $('#o-pages', el);
+    pages.addEventListener('click', (e) => select(e.target));
     pages.addEventListener('focusin', (e) => {
       clearTimeout(pt);                                           // ย้ายไปแก้จุดอื่น ไม่วาดหน้าใหม่ทับ
-      const k = e.target.dataset?.pkey; if (k) { selKey = k; refreshBar(); }
+      select(e.target);
     });
     pages.addEventListener('focusout', (e) => { if (e.target.isContentEditable && dirtyPage) { dirtyPage = false; schedulePreview(450); } });
     pages.addEventListener('input', (e) => {
       const t = e.target; if (locked() || !t.isContentEditable) return;
-      const text = t.innerText.replace(/\s*\n+\s*/g, ' ');
       if (t.dataset.pkey) {
+        const text = canBreak(t) ? pageText(t) : pageText(t).replace(/\s*\n+\s*/g, ' ');
         o[t.dataset.pkey] = text;
         const f = $(`[name="${t.dataset.pkey}"]`, $('#o-form', el)); if (f) f.value = text;
       } else if (t.dataset.ed) {
-        const d = JSON.parse(t.dataset.ed); setMember(d, d.f, text);
+        const d = JSON.parse(t.dataset.ed); setMember(d, d.f, pageText(t).replace(/\s*\n+\s*/g, ' '));
         if (o.kind === 'annual') drawMembers(); else drawCommittees();
       } else return;
       dirtyPage = true; queueSave(false, false);
     });
     pages.addEventListener('keydown', (e) => {
       const t = e.target; if (!t.isContentEditable) return;
-      if (e.key === 'Enter') { e.preventDefault(); t.blur(); return; }
-      if (e.key === 'Tab' && t.dataset.pkey) {                    // Tab / Shift+Tab = เพิ่ม/ลดย่อหน้า
-        e.preventDefault(); selKey = t.dataset.pkey;
-        setIndent({ first: paraOf(selKey).first + (e.shiftKey ? -0.5 : 0.5) });
+      if (e.key === 'Enter') {                                    // Shift+Enter = ขึ้นบรรทัดใหม่ในย่อหน้าเดิม · Enter = เสร็จ
+        e.preventDefault();
+        if (e.shiftKey && canBreak(t)) document.execCommand('insertLineBreak'); else t.blur();
+        return;
+      }
+      if (e.key === 'Tab') {                                      // Tab / Shift+Tab = เพิ่ม/ลดย่อหน้า (ย่อหน้า: บรรทัดแรก · บรรทัดอื่น: เยื้องซ้าย)
+        e.preventDefault(); select(t); if (!sel) return;
+        nudge(sel.type === 'para' ? 'first' : 'left', e.shiftKey ? -0.5 : 0.5);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === '[' || e.key === ']')) {   // Ctrl+[ / Ctrl+] = ลด/เพิ่มขนาดอักษร (เหมือน Word)
+        e.preventDefault(); select(t); if (sel) nudge('size', e.key === ']' ? 0.5 : -0.5);
       }
     });
     pages.addEventListener('paste', (e) => {
@@ -385,13 +470,16 @@ async function editor(el, ctx, id) {
       e.preventDefault(); document.execCommand('insertText', false, (e.clipboardData.getData('text/plain') || '').replace(/\s*\n+\s*/g, ' '));
     });
     const bar = $('#o-ibar', el);
-    bar.addEventListener('mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); });
-    $$('[data-ib]', bar).forEach((b) => b.addEventListener('click', () => {
-      const [fld, d] = b.dataset.ib.split(':'); setIndent({ [fld]: paraOf(selKey)[fld] + Number(d) });
-    }));
-    $('#ib-first', bar).addEventListener('change', (e) => setIndent({ first: e.target.value }));
-    $('#ib-left', bar).addEventListener('change', (e) => setIndent({ left: e.target.value }));
-    $('#ib-reset', bar).addEventListener('click', () => setIndent({ ...INDENT_DEFAULT }));
+    bar.addEventListener('mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); });   // กดปุ่มแล้วเคอร์เซอร์บนหน้าไม่หลุด
+    $$('[data-ib]', bar).forEach((b) => b.addEventListener('click', () => { if (!sel) return; const [fld, d] = b.dataset.ib.split(':'); nudge(fld, Number(d)); }));
+    $$('input[data-val]', bar).forEach((inp) => inp.addEventListener('change', () => setFmt({ [inp.dataset.val]: inp.value })));
+    $$('[data-al]', bar).forEach((b) => b.addEventListener('click', () => setFmt({ align: b.dataset.al })));
+    $('#ib-pb', bar).addEventListener('change', (e) => setFmt({ pb: e.target.checked }));
+    $('#ib-br', bar).addEventListener('click', () => insertAtCaret('\n'));
+    $('#ib-tab', bar).addEventListener('click', () => insertAtCaret('\t'));
+    $('#ib-all', bar).addEventListener('click', applyAll);
+    $('#ib-reset', bar).addEventListener('click', resetBlock);
+    $('#ib-clear', bar).addEventListener('click', clearAllFmt);
   }
   let dirtyPage = false;
 
@@ -400,11 +488,20 @@ async function editor(el, ctx, id) {
       <div class="stack print-area">
         <div class="hint no-print" id="o-pinfo"></div>
         <div class="ibar no-print" id="o-ibar" data-off="1">
-          <b id="ib-name"></b>
-          <span class="step">บรรทัดแรก <button type="button" class="btn btn-sm" data-ib="first:-0.5" aria-label="ลดย่อหน้าบรรทัดแรก">−</button><input type="number" id="ib-first" step="0.25" min="-8" max="8"><button type="button" class="btn btn-sm" data-ib="first:0.5" aria-label="เพิ่มย่อหน้าบรรทัดแรก">+</button> ซม.</span>
-          <span class="step">เยื้องทั้งย่อหน้า <button type="button" class="btn btn-sm" data-ib="left:-0.5" aria-label="ลดการเยื้อง">−</button><input type="number" id="ib-left" step="0.25" min="0" max="8"><button type="button" class="btn btn-sm" data-ib="left:0.5" aria-label="เพิ่มการเยื้อง">+</button> ซม.</span>
-          <button type="button" class="btn btn-sm btn-ghost rst" id="ib-reset">คืนค่ามาตรฐาน (2.5 ซม.)</button>
-          <span class="muted small" style="flex-basis:100%">${locked() ? 'คำสั่งล็อกอยู่ แก้ไขบนหน้าไม่ได้' : 'คลิกข้อความบนหน้ากระดาษเพื่อพิมพ์แก้ได้ทันที (ย่อหน้า ชื่อ ตำแหน่ง บทบาท) · กด Tab / Shift+Tab เพื่อเพิ่ม/ลดย่อหน้า'}</span>
+          <div class="ibar-row"><b id="ib-name"></b><span class="grow"></span>
+            <button type="button" class="btn btn-sm btn-ghost need" id="ib-all"></button>
+            <button type="button" class="btn btn-sm btn-ghost need" id="ib-reset">คืนค่ามาตรฐานบรรทัดนี้</button>
+            <button type="button" class="btn btn-sm btn-ghost" id="ib-clear" hidden>ล้างรูปแบบทั้งฉบับ</button></div>
+          <div class="ibar-row need">
+            ${STEPS.map(([k, label, unit, d]) => `<span class="step" data-fld="${k}">${label} <button type="button" class="btn btn-sm" data-ib="${k}:${-d}" aria-label="ลด${label}">−</button><input type="number" data-val="${k}" step="${FMT_LIMITS[k][2]}" min="${FMT_LIMITS[k][0]}" max="${FMT_LIMITS[k][1]}" aria-label="${label} (${unit})"><button type="button" class="btn btn-sm" data-ib="${k}:${d}" aria-label="เพิ่ม${label}">+</button> ${unit}</span>`).join('')}
+          </div>
+          <div class="ibar-row need">
+            <span class="step" data-fld="align">จัดแนว <span class="seg">${[['l', 'ซ้าย'], ['c', 'กลาง'], ['r', 'ขวา'], ['d', 'กระจายแบบไทย']].map(([k, t]) => `<button type="button" data-al="${k}">${t}</button>`).join('')}</span></span>
+            <label class="inline small" data-fld="pb"><input type="checkbox" id="ib-pb"> ขึ้นหน้าใหม่ก่อนบรรทัดนี้</label>
+            <span class="step">แทรก <button type="button" class="btn btn-sm" id="ib-br" title="Shift+Enter">↵ ขึ้นบรรทัดใหม่</button><button type="button" class="btn btn-sm" id="ib-tab">⇥ แท็บ</button></span>
+          </div>
+          <span class="muted small">${locked() ? 'คำสั่งล็อกอยู่ แก้ไขบนหน้าไม่ได้'
+            : 'คลิกบรรทัดใดก็ได้บนหน้ากระดาษเพื่อเลือก แล้วปรับด้านบน · คำตกบรรทัด: ลด "ระยะอักษร" หรือ "ขนาดอักษร" ทีละน้อย หรือกด Shift+Enter ตัดบรรทัดเองตรงที่ต้องการ · Tab / Shift+Tab = เพิ่ม/ลดย่อหน้า · Ctrl+] / Ctrl+[ = เพิ่ม/ลดขนาดอักษร · "กระจายแบบไทย" มีผลในไฟล์ Word (บนจอแสดงชิดซ้าย)'}</span>
         </div>
         <div class="doc-scroll"><div class="doc-zoom" id="o-pages"></div></div>
       </div></div>`;

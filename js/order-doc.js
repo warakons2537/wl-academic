@@ -52,9 +52,48 @@ export function resolveSpecial(order, staffById) {
 
 export const splitLines = (t) => String(t || '').split('\n').map((x) => x.replace(/^\s*(\(?[0-9๐-๙]+[.)]\s*|[-•]\s*)/, '').trim()).filter(Boolean);
 
-// ย่อหน้าตามระเบียบ: บรรทัดแรกเว้น 2.5 ซม. · first = เยื้องบรรทัดแรก, left = เยื้องทั้งย่อหน้า (ซม.)
-export const INDENT_DEFAULT = { first: 2.5, left: 0 };
-export const clampIndent = (v, lo = 0, hi = 8) => Math.min(hi, Math.max(lo, Math.round((Number(v) || 0) * 4) / 4));
+// ---------- รูปแบบของแต่ละบล็อก (ปรับได้บนหน้ากระดาษ) ----------
+// หน่วย: first/left/right = ซม. · size/cs/before = พอยต์ · align = l ซ้าย | c กลาง | r ขวา | d กระจายแบบไทย (ใน Word) · pb = ขึ้นหน้าใหม่ก่อนบล็อกนี้
+// ค่ามาตรฐานตามระเบียบ: ย่อหน้าเว้นบรรทัดแรก 2.5 ซม. · ตัวอักษร 16 พอยต์
+export const FMT_COMMON = { first: 0, left: 0, right: 0, size: 16, cs: 0, before: 0, align: 'l', pb: false };
+export const FMT_BASE = {
+  center: { align: 'c' },
+  para: { first: 2.5, before: 6, align: 'd' },
+  heading: { left: 2.5, before: 6 },
+  member: { left: 3.5 },
+  dutyLabel: { left: 3.5 },
+  duty: { left: 3.5, align: 'd' },
+};
+// ช่องที่ปรับได้ของบล็อกแต่ละชนิด
+export const FMT_FIELDS = {
+  center: ['left', 'right', 'size', 'cs', 'before', 'align'],
+  para: ['first', 'left', 'right', 'size', 'cs', 'before', 'align', 'pb'],
+  heading: ['left', 'right', 'size', 'cs', 'before', 'pb'],
+  member: ['left', 'size', 'cs', 'before'],
+  dutyLabel: ['left', 'size', 'cs', 'before', 'pb'],
+  duty: ['left', 'right', 'size', 'cs', 'before', 'align', 'pb'],
+};
+// [ต่ำสุด, สูงสุด, ความละเอียด]
+export const FMT_LIMITS = { first: [-8, 8, 0.05], left: [0, 10, 0.05], right: [-1.5, 8, 0.05], size: [8, 26, 0.5], cs: [-2, 4, 0.05], before: [0, 72, 1] };
+export const fmtBase = (type) => ({ ...FMT_COMMON, ...(FMT_BASE[type] || {}) });
+export function cleanFmt(type, f) {
+  const out = { ...fmtBase(type) };
+  for (const k of FMT_FIELDS[type] || []) {
+    const v = f?.[k]; if (v === undefined || v === null || v === '') continue;
+    if (k === 'pb') out.pb = !!v;
+    else if (k === 'align') { if ('lcrd'.includes(v) && String(v).length === 1) out.align = v; }
+    else {
+      const [lo, hi, step] = FMT_LIMITS[k]; const n = Number(v);
+      if (Number.isFinite(n)) out[k] = Math.round(Math.min(hi, Math.max(lo, Math.round(n / step) * step)) * 100) / 100;
+    }
+  }
+  if (out.first < -out.left) out.first = -out.left;          // ย่อหน้าแขวนต้องไม่เลยขอบกระดาษ
+  return out;
+}
+// รูปแบบที่ใช้จริง = มาตรฐาน ← ตั้งทั้งชนิด (options.fmtAll) ← ย่อหน้าแบบเดิม (options.para) ← เฉพาะบล็อก (options.fmt)
+// key = null → ได้ค่าของทั้งชนิด
+export const fmtOf = (type, key, options) => cleanFmt(type, { ...(options?.fmtAll?.[type] || {}),
+  ...(key ? { ...(options?.para?.[key] || {}), ...(options?.fmt?.[key] || {}) } : {}) });
 
 // ---------- 2) แบบจำลองเอกสาร ----------
 // sections = ผลจาก resolve*, meta = { schoolName }
@@ -63,50 +102,68 @@ export function buildModel(order, sections, meta) {
   const D = (s) => digits(s, mode);
   const showDuties = order.options?.show_duties !== false;
   const B = [];
-  B.push({ type: 'garuda' });
-  B.push({ type: 'center', text: D(`คำสั่งโรงเรียน${meta.schoolName || '……………'}`) });
-  B.push({ type: 'center', text: D(`ที่ ${order.number || '……/……'}`) });
-  B.push({ type: 'center', text: D(`เรื่อง ${order.title || '……………'}`) });
-  B.push({ type: 'rule' });
-  const P = order.options?.para || {};
+  const push = (b) => { if (b.key) b.f = fmtOf(b.type, b.key, order.options); B.push(b); };
+  const nl = (t) => String(t ?? '').replace(/\r/g, '');
+  push({ type: 'garuda' });
+  push({ type: 'center', key: 'school', text: D(`คำสั่งโรงเรียน${meta.schoolName || '……………'}`) });
+  // field = แก้บนหน้ากระดาษได้ (pre = คำนำหน้าที่แก้ไม่ได้, val = ค่าที่แก้)
+  push({ type: 'center', key: 'number', field: 'number', pre: 'ที่ ', val: D(nl(order.number)), text: D(`ที่ ${nl(order.number) || '……/……'}`) });
+  push({ type: 'center', key: 'title', field: 'title', pre: 'เรื่อง ', val: D(nl(order.title)), text: D(`เรื่อง ${nl(order.title) || '……………'}`) });
+  push({ type: 'rule' });
   const para = (key, extra = {}) => {
-    const t = order[key];
-    if (!t?.trim()) return;
-    const p = P[key] || {};
-    B.push({ type: 'para', key, text: D(t.trim()), space: true, first: p.first ?? INDENT_DEFAULT.first, left: p.left ?? INDENT_DEFAULT.left, ...extra });
+    const t = nl(order[key]);
+    if (!t.trim()) return;
+    push({ type: 'para', key, text: D(t.trim()), ...extra });
   };
   para('reason'); para('legal');
 
   sections.forEach((sec, i) => {
-    const no = i + 1;
-    B.push({ type: 'heading', no: D(`${no}.`), text: D(sec.name), keep: true });
-    if (!sec.members.length) B.push({ type: 'member', no: '', name: '(ยังไม่ได้มอบหมาย)', title: '', role: '', empty: true });
-    sec.members.forEach((m, k) => B.push({ type: 'member', no: D(`${no}.${k + 1}`), name: D(m.name), title: D(m.title), role: D(m.role), ref: m.ref }));
+    const no = i + 1; const sk = sec.id ?? `c${i}`;
+    push({ type: 'heading', key: `h:${sk}`, no: D(`${no}.`), text: D(sec.name), keep: true });
+    if (!sec.members.length) push({ type: 'member', key: `m:${sk}:-`, no: '', name: '(ยังไม่ได้มอบหมาย)', title: '', role: '', empty: true });
+    sec.members.forEach((m, k) => push({ type: 'member', key: `m:${sk}:${m.ref?.id ?? k}`, no: D(`${no}.${k + 1}`), name: D(m.name), title: D(m.title), role: D(m.role), ref: m.ref }));
     if (showDuties && sec.duties.length) {
-      B.push({ type: 'dutyLabel', text: 'มีหน้าที่', keep: true });
-      sec.duties.forEach((d, k) => B.push({ type: 'duty', no: D(`(${k + 1})`), text: D(d) }));
+      push({ type: 'dutyLabel', key: `dl:${sk}`, text: 'มีหน้าที่', keep: true });
+      sec.duties.forEach((d, k) => push({ type: 'duty', key: `d:${sk}:${k}`, no: D(`(${k + 1})`), text: D(d) }));
     }
   });
 
   para('closing'); para('effective_text', { keep: true });
-  B.push({ type: 'sign', when: D(`สั่ง ณ วันที่ ${order.signed_date ? orderDate(order.signed_date) : '……… เดือน ……………… พ.ศ. ………'}`),
+  push({ type: 'sign', when: D(`สั่ง ณ วันที่ ${order.signed_date ? orderDate(order.signed_date) : '……… เดือน ……………… พ.ศ. ………'}`),
     name: D(`(${order.signer_name || '……………………………'})`), title: D(order.signer_title || 'ผู้อำนวยการโรงเรียน') });
   return { blocks: B, numerals: mode };
 }
 
 // ---------- 3) HTML ของแต่ละบล็อก ----------
+const num = (n) => String(Math.round(n * 1000) / 1000);
+// รูปแบบ → CSS (ขนาด/ระยะอักษรคิดเป็นสัดส่วนของ --doc-size จึงใช้ได้ทั้งฟอนต์จริงและฟอนต์สำรอง)
+export function fmtStyle(b) {
+  const f = b.f; if (!f) return '';
+  const s = []; const k = f.size / 16;
+  if (k !== 1) s.push(`font-size:calc(var(--doc-size)*${num(k)})`, `line-height:calc(var(--doc-lh)*${num(k)})`);
+  if (f.cs) s.push(`letter-spacing:calc(var(--doc-size)*${num(f.cs / 16)})`);
+  s.push(`padding-top:${num(f.before)}pt`, `padding-left:${num(f.left + (b.type === 'duty' ? 1.1 : 0))}cm`);
+  if (f.right) s.push(`margin-right:${num(f.right)}cm`);
+  if (b.type === 'para') s.push(`text-indent:${num(f.first)}cm`);
+  if (b.type === 'para' || b.type === 'center' || b.type === 'duty') s.push(`text-align:${{ c: 'center', r: 'right' }[f.align] || 'left'}`);
+  return s.join(';');
+}
 const ed = (b, field, editable) => (editable && b.ref
   ? ` class="ed" contenteditable="true" spellcheck="false" data-ed="${esc(JSON.stringify({ ...b.ref, f: field }))}"` : '');
 export function blockHtml(b, { garuda, editable } = {}) {
+  const at = b.key ? ` data-bk="${esc(b.key)}" data-bt="${b.type}" style="${fmtStyle(b)}"` : '';
+  const edit = ' contenteditable="true" spellcheck="false"';
   switch (b.type) {
     case 'garuda': return `<div class="b garuda">${garuda ? `<img src="${esc(garuda)}" alt="ตราครุฑ">` : '<span class="ph">ตราครุฑ<br>(อัปโหลดใน<br>ข้อมูลพื้นฐาน)</span>'}</div>`;
-    case 'center': return `<div class="b c">${esc(b.text)}</div>`;
+    case 'center': return editable && b.field
+      ? `<div class="b c"${at}><span>${esc(b.pre)}</span><span class="ed"${edit} data-pkey="${b.field}">${esc(b.val)}</span></div>`
+      : `<div class="b c"${at}>${esc(b.text)}</div>`;
     case 'rule': return '<div class="b rule"><span></span></div>';
-    case 'para': return `<div class="b p${b.space ? ' sp' : ''}${editable && b.key ? ' ed' : ''}" style="text-indent:${b.first}cm;padding-left:${b.left}cm"${editable && b.key ? ` contenteditable="true" spellcheck="false" data-pkey="${b.key}"` : ''}>${esc(b.text)}</div>`;
-    case 'heading': return `<div class="b h"><span>${esc(b.no)}</span><span>${esc(b.text)}</span></div>`;
-    case 'member': return `<div class="b m"><span>${esc(b.no)}</span><span>${b.empty ? `<i style="color:#b3261e">${esc(b.name)}</i>` : `<span${ed(b, 'name', editable)}>${esc(b.name)}</span>`}</span><span><span${ed(b, 'title', editable)}>${esc(b.title)}</span></span><span><span${ed(b, 'role', editable)}>${esc(b.role)}</span></span></div>`;
-    case 'dutyLabel': return `<div class="b dl">${esc(b.text)}</div>`;
-    case 'duty': return `<div class="b d"><span class="n">${esc(b.no)}</span>${esc(b.text)}</div>`;
+    case 'para': return `<div class="b p${editable ? ' ed' : ''}"${at}${editable ? `${edit} data-pkey="${b.key}"` : ''}>${esc(b.text)}</div>`;
+    case 'heading': return `<div class="b h"${at}><span>${esc(b.no)}</span><span>${esc(b.text)}</span></div>`;
+    case 'member': return `<div class="b m"${at}><span>${esc(b.no)}</span><span>${b.empty ? `<i style="color:#b3261e">${esc(b.name)}</i>` : `<span${ed(b, 'name', editable)}>${esc(b.name)}</span>`}</span><span><span${ed(b, 'title', editable)}>${esc(b.title)}</span></span><span><span${ed(b, 'role', editable)}>${esc(b.role)}</span></span></div>`;
+    case 'dutyLabel': return `<div class="b dl"${at}>${esc(b.text)}</div>`;
+    case 'duty': return `<div class="b d"${at}><span class="n">${esc(b.no)}</span>${esc(b.text)}</div>`;
     case 'sign': return `<div class="b sign"><div class="when">${esc(b.when)}</div><div class="who">${esc(b.name)}<br>${esc(b.title)}</div></div>`;
     default: return '';
   }
@@ -116,11 +173,12 @@ export function blockHtml(b, { garuda, editable } = {}) {
 const MM = 96 / 25.4;
 export const CONTENT_H = (297 - 25 - 20) * MM;   // พื้นที่เนื้อหาต่อหน้า (px)
 
-export function paginate(heights, keep) {
-  // keep[i] = บล็อก i ต้องอยู่หน้าเดียวกับบล็อกถัดไป
+export function paginate(heights, keep, brk = []) {
+  // keep[i] = บล็อก i ต้องอยู่หน้าเดียวกับบล็อกถัดไป · brk[i] = บังคับขึ้นหน้าใหม่ก่อนบล็อก i
   const pages = []; let cur = []; let used = 0;
   for (let i = 0; i < heights.length; i++) {
     const h = heights[i];
+    if (brk[i] && cur.length) { pages.push(cur); cur = []; used = 0; }
     if (used + h > CONTENT_H + 0.5 && cur.length) {
       // ดึงบล็อกที่ต้องติดกันท้ายหน้าไปหน้าใหม่ด้วย
       const carry = [];
@@ -147,7 +205,8 @@ export function hasThaiOfficialFont() {
 }
 
 // วาดเอกสารเป็นหน้า A4 ลงใน el (คืนจำนวนหน้า)
-export async function renderPages(el, model, { garuda, editable = false } = {}) {
+// stale() = true เมื่อมีการวาดรอบใหม่กว่าเริ่มแล้ว → ไม่เขียนทับ (คืน null)
+export async function renderPages(el, model, { garuda, editable = false, stale } = {}) {
   try { await document.fonts.ready; } catch { /* */ }
   const fallback = !hasThaiOfficialFont();
   const htmls = model.blocks.map((b) => blockHtml(b, { garuda, editable }));
@@ -160,7 +219,8 @@ export async function renderPages(el, model, { garuda, editable = false } = {}) 
   const heights = [...meas.children].map((c) => c.getBoundingClientRect().height);
   meas.remove();
   const keep = model.blocks.map((b) => !!b.keep);
-  const pages = paginate(heights, keep);
+  const pages = paginate(heights, keep, model.blocks.map((b) => !!b.f?.pb));
+  if (stale?.()) return null;
   const D = (s) => digits(s, model.numerals);
   el.innerHTML = pages.map((idx, p) => `<div class="doc-page${fallback ? ' fallback' : ''}">
       ${p > 0 ? `<div class="pageno">${esc(D(`- ${p + 1} -`))}</div>` : ''}

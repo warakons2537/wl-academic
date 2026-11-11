@@ -566,11 +566,17 @@ ul.log a svg.i { width: 14px; height: 14px; vertical-align: -2px; }
 .doc-page .ed:hover { background: color-mix(in srgb, var(--gold, #c9a227) 14%, transparent); }
 .doc-page .ed:focus { outline: 1.5px solid var(--gold, #c9a227); outline-offset: 1px; background: color-mix(in srgb, var(--gold, #c9a227) 10%, transparent); }
 .doc-page .ed:empty::before { content: "…"; color: #aaa; }
-.ibar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 12px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper); font-size: .86rem; position: sticky; top: 0; z-index: 5; }
-.ibar .step { display: inline-flex; align-items: center; gap: 4px; }
-.ibar .step input { width: 4.6em; text-align: center; padding: 4px 6px; }
+.doc-page .b, .doc-measure .b { white-space: pre-wrap; tab-size: 1cm; -moz-tab-size: 1cm; }   /* \n = ขึ้นบรรทัดใหม่ · \t = แท็บ 1 ซม. (เท่ากับใน Word) */
+.doc-page .b[data-bk] { cursor: pointer; }
+.doc-page .b.sel { outline: 1px dashed color-mix(in srgb, var(--gold, #c9a227) 80%, #000); outline-offset: 2px; }
+.ibar { display: flex; flex-direction: column; gap: 8px; padding: 8px 12px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper); font-size: .86rem; position: sticky; top: 0; z-index: 5; }
+.ibar-row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.ibar .step { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ibar .step input { width: 4.4em; text-align: center; padding: 4px 6px; }
 .ibar .step button { min-width: 30px; }
-.ibar[data-off="1"] .step, .ibar[data-off="1"] .rst { opacity: .45; pointer-events: none; }
+.ibar .seg button { min-height: 32px; padding: 3px 12px; }
+.ibar [hidden] { display: none !important; }
+.ibar[data-off="1"] .need { opacity: .45; pointer-events: none; }
 .mgroup { border: 1px solid var(--rule); border-radius: var(--r); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
 .mgroup > summary { cursor: pointer; font-weight: 600; }
 .mrow { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, .8fr) auto; gap: 6px; align-items: center; }
